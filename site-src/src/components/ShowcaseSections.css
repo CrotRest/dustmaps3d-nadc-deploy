@@ -1,0 +1,91 @@
+/* 02 · 03 · 04: a narrow text column on the left, the galaxy background is the picture */
+
+.showcase {
+  position: relative;
+  scroll-margin-top: 84px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 56px 0 48px;
+  min-height: 480px;
+}
+
+/* keep in step with MAP_TEXT_W in galaxy/shots.js: the 02 map starts right of this column */
+.showcase__content {
+  position: relative;
+  max-width: 440px;
+}
+
+.showcase__sub {
+  text-wrap: pretty;
+}
+
+.showcase__cta {
+  margin-top: 26px;
+}
+
+/* ---------- 03 · numbered hairline list ---------- */
+
+/* the infrared view behind 03 is bright and busy: a soft dark pool under the text */
+.showcase--bcp .showcase__content::before {
+  content: '';
+  position: absolute;
+  inset: -60px -90px -60px -70px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(3, 4, 11, 0.72), rgba(3, 4, 11, 0.45) 60%, rgba(3, 4, 11, 0));
+  pointer-events: none;
+}
+
+.bcp__points {
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hair);
+}
+
+.bcp__points li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: baseline;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 14px;
+  line-height: 1.75;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  text-shadow: 0 1px 14px rgba(3, 4, 11, 0.9);
+}
+
+.bcp__num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+/* Narrow screens: text first; the leftover height lets the background shot show through. */
+@media (max-width: 760px) {
+  .showcase {
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 44px 0 270px;
+  }
+
+  .showcase__content {
+    max-width: none;
+  }
+
+  .showcase--sky {
+    padding-bottom: 190px;
+  }
+
+  .showcase--bcp {
+    padding-bottom: 150px;
+  }
+
+  /* room under the text for the reddening star and its reticle */
+  .showcase--red {
+    padding-bottom: 280px;
+  }
+}

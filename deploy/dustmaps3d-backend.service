@@ -1,0 +1,28 @@
+# systemd unit for dustmaps3d-backend (the 3D Dust Map website's API).
+# Install:  cp dustmaps3d-backend.service /etc/systemd/system/
+#           systemctl daemon-reload && systemctl enable --now dustmaps3d-backend
+# Logs:     journalctl -u dustmaps3d-backend -f
+
+[Unit]
+Description=dustmaps3d-backend (FastAPI) for the 3D Dust Map website
+After=network.target
+
+[Service]
+Type=simple
+User=dustmaps
+Group=dustmaps
+# The backend reads .env from, and resolves var/ paths against, this directory.
+WorkingDirectory=/opt/dustmaps3d/backend
+Environment=MPLCONFIGDIR=/opt/dustmaps3d/backend/var/matplotlib
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=OMP_NUM_THREADS=1
+# java must be findable for STILTS; add its bin directory here if it is not in /usr/bin or /usr/local/bin.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Exactly one HTTP worker (the backend's computation pool and admission limit are per process).
+ExecStart=/opt/dustmaps3d/backend/.venv/bin/python -m uvicorn dustmaps_backend.main:app --host 127.0.0.1 --port 58123 --workers 1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,107 @@
+.features {
+  scroll-margin-top: 84px;
+  padding: 62px 0 26px;
+}
+
+.features__list {
+  border-top: 1px solid var(--hair);
+}
+
+.feature-row {
+  appearance: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  padding: 26px 6px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* a brighter hairline draws in along the bottom edge on hover, or while the row's
+   demo is playing in the galaxy (touch screens take turns) */
+.feature-row::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--hair-strong);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s var(--ease-out);
+}
+
+.feature-row:hover::after,
+.feature-row:focus-visible::after,
+.feature-row.is-playing::after {
+  transform: scaleX(1);
+}
+
+.feature-row__title {
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: var(--track-title);
+  color: var(--ink);
+}
+
+.feature-row__enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.feature-row:hover .feature-row__enter,
+.feature-row.is-playing .feature-row__enter {
+  color: var(--ink);
+}
+
+.feature-row__arrow {
+  font-size: 17px;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.feature-row:hover .feature-row__arrow,
+.feature-row.is-playing .feature-row__arrow {
+  transform: translateX(6px);
+}
+
+@media (max-width: 760px) {
+  .features {
+    padding: 48px 0 20px;
+  }
+
+  .feature-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'title enter';
+    gap: 8px 16px;
+    padding: 20px 2px;
+  }
+
+  .feature-row__title {
+    grid-area: title;
+    font-size: 19px;
+  }
+
+  .feature-row__enter {
+    grid-area: enter;
+  }
+
+  .feature-row__enter-label {
+    display: none;
+  }
+}

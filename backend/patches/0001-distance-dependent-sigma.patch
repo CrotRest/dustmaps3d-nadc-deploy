@@ -1,0 +1,64 @@
+diff --git a/dustmaps_backend/science.py b/dustmaps_backend/science.py
+index 8a92eca..108a6f2 100644
+--- a/dustmaps_backend/science.py
++++ b/dustmaps_backend/science.py
+@@ -204,6 +204,23 @@ def validate_and_prepare_dataframe(df):
+     # 确保返回的 DataFrame 包含 l, b, d
+     return df, None
+ 
++def distance_sigma(distance, row):
++    """
++    E(B-V) 不确定度，按距离分段取值，与 dustmaps3d 包 (core.read_map) 的规则一致：
++    d<1 kpc 取 min(sigma, sigma_0_2)；1–2 kpc 取 min(sigma, sigma_0_2, sigma_1_4)；
++    2–4 kpc 取 min(sigma_1_4, sigma_2_max)；≥4 kpc 取 sigma_2_max；后两段为 NaN 时退回 sigma。
++    数据缺少分段列时，相当于只用 sigma。
++    """
++    part = lambda name: row.get(name, np.nan)
++    with warnings.catch_warnings():
++        warnings.simplefilter("ignore", RuntimeWarning)  # 全为 NaN 时 nanmin 返回 NaN，与包一致
++        if distance < 1:
++            return np.nanmin([row['sigma'], part('sigma_0_2')])
++        if distance < 2:
++            return np.nanmin([row['sigma'], part('sigma_0_2'), part('sigma_1_4')])
++        primary = np.nanmin([part('sigma_1_4'), part('sigma_2_max')]) if distance < 4 else part('sigma_2_max')
++    return row['sigma'] if pd.isna(primary) else primary
++
+ def calculate_dust_properties(l_coords, b_coords, distances, df_global):
+     """
+     统一的计算函数，适配处理后的数据 (data.parquet)。
+@@ -270,8 +287,8 @@ def calculate_dust_properties(l_coords, b_coords, distances, df_global):
+                                                 data_row['distance_3'], data_row['span_3'], data_row['Cum_EBV_3'],
+                                                 data_row['distance_4'], data_row['span_4'], data_row['Cum_EBV_4'])
+ 
+-        sigma_final = data_row['sigma']
+-        
++        sigma_final = distance_sigma(d_for_calc, data_row)
++
+         results['E(B-V)'].append(ebv)
+         results['dust_density'].append(dust_density) # 单位 mag/kpc, 数值上等于 mmag/pc
+         results['sigma'].append(sigma_final)
+diff --git a/tests/test_scientific.py b/tests/test_scientific.py
+index 2004208..8841999 100644
+--- a/tests/test_scientific.py
++++ b/tests/test_scientific.py
+@@ -41,6 +41,20 @@ class ScientificTests(unittest.TestCase):
+                 single = execute("query", {"coord_system": "galactic", "coord1": 120.5, "coord2": 25.3, "d": None}, settings)
+                 self.assertEqual(single["EBV"], table["E_B_V_mag"][0])
+ 
++    def test_sigma_follows_distance_bins_of_the_package(self):
++        # Same piecewise rule as dustmaps3d.core.read_map: each distance bin takes the
++        # smallest available estimate; NaN partial estimates fall back to the overall sigma.
++        row = pd.Series(dict(sigma=0.05, sigma_0_2=0.02, sigma_1_4=0.03, sigma_2_max=0.04))
++        cases = [(0.5, 0.02), (1.5, 0.02), (3.0, 0.03), (6.0, 0.04)]
++        for distance, expected in cases:
++            with self.subTest(distance=distance):
++                self.assertAlmostEqual(float(science.distance_sigma(distance, row)), expected)
++        row_nan = pd.Series(dict(sigma=0.05, sigma_0_2=np.nan, sigma_1_4=np.nan, sigma_2_max=np.nan))
++        for distance in (0.5, 1.5, 3.0, 6.0):
++            with self.subTest(distance=distance, partial="nan"):
++                self.assertAlmostEqual(float(science.distance_sigma(distance, row_nan)), 0.05)
++        self.assertAlmostEqual(float(science.distance_sigma(3.0, pd.Series(dict(sigma=0.05)))), 0.05)
++
+     def test_resource_and_input_validation(self):
+         for constructor, data in [(DustQuery, {"coord1": 361, "coord2": 0}),
+                                   (DustQuery, {"coord1": 10, "coord2": 0, "d": float("inf")}),

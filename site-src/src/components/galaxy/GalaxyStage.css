@@ -1,0 +1,46 @@
+.galaxy-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--space);
+}
+
+.galaxy-stage__gl,
+.galaxy-stage__hud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* keeps the left text column readable over the brightest parts of the galaxy */
+.galaxy-stage__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 4, 11, 0.74) 0%, rgba(3, 4, 11, 0.5) 30%, rgba(3, 4, 11, 0.12) 52%, rgba(3, 4, 11, 0) 64%),
+    linear-gradient(180deg, rgba(3, 4, 11, 0.35) 0%, rgba(3, 4, 11, 0) 14%);
+}
+
+/* no WebGL: a still, painted galaxy */
+.galaxy-stage--fallback .galaxy-stage__gl,
+.galaxy-stage--fallback .galaxy-stage__hud {
+  display: none;
+}
+
+.galaxy-stage--fallback {
+  background:
+    radial-gradient(ellipse 9% 6% at 66% 46%, rgba(255, 240, 210, 0.9), transparent 70%),
+    radial-gradient(ellipse 26% 14% at 66% 46%, rgba(255, 190, 120, 0.45), transparent 72%),
+    radial-gradient(ellipse 48% 24% at 64% 48%, rgba(150, 120, 230, 0.22), transparent 75%),
+    radial-gradient(ellipse 40% 22% at 76% 60%, rgba(255, 120, 60, 0.16), transparent 70%),
+    var(--space);
+}
+
+@media (max-width: 760px) {
+  .galaxy-stage__scrim {
+    background: linear-gradient(180deg, rgba(3, 4, 11, 0.5) 0%, rgba(3, 4, 11, 0.3) 45%, rgba(3, 4, 11, 0.45) 100%);
+  }
+}
