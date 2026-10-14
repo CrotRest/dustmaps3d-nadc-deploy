@@ -314,7 +314,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 
 ## 版本
 
-- 网站：2026-10-14 构建，源码见 `site-src/`（本次更新：联系区加成员贡献；07 加 Citations 引用论文列表；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带）。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
+- 网站：2026-10-14 构建，源码见 `site-src/`（本次更新：联系区加成员贡献；07 加 Citations 引用论文列表（ADS 34 篇）；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带）。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
 - 后端：SunnyHina/dustmaps3d-backend @ `564cfb8`，加 `0001-distance-dependent-sigma.patch`
 - 数据：dustmaps3d `data_v3.fits`（HEALPix Nside = 1024，RING 排序，12,582,912 行）
 - 本地验收（macOS，Python 3.11.15，Java 11，STILTS 3.5-6）：后端测试 10/10，前端测试 103/103，`smoke_test.sh` 在模拟的 `/data/dustmaps3d/` 子路径下 11/11 通过。Nginx 配置文件未在真实 Nginx 上做过 `nginx -t`，请在 4.10 步执行。

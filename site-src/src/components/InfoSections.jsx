@@ -95,8 +95,8 @@ function CitedBy() {
       </div>
       <ul className="cited__grid">
         {shown.map((p) => (
-          <li key={p.doi}>
-            <a className="cited__card" href={`https://doi.org/${p.doi}`} target="_blank" rel="noreferrer">
+          <li key={p.doi || p.url}>
+            <a className="cited__card" href={p.url || `https://doi.org/${p.doi}`} target="_blank" rel="noreferrer">
               <span className="cited__meta">
                 {p.who} {p.year} · <em>{p.journal}</em>
               </span>
