@@ -32,13 +32,15 @@ Nginx（已有的 NADC server 块里新增 6 个 location）
                      dustmaps3d-backend（systemd 服务，uvicorn，1 个 HTTP worker）
                        ├─ /opt/dustmaps3d/data/data.parquet   模型参数（单点、批量、笛卡尔图、正射图）
                        ├─ /opt/dustmaps3d/data/data_v3.fits   同一模型的 FITS 版（气泡分析）
+                       ├─ /opt/dustmaps3d/data/grid3d.parquet 三维尘埃网格（斜剖面投影）
+                       ├─ /opt/dustmaps3d/data/superbubble_final_fit_parameters.csv  超级气泡参数（斜剖面叠加截面）
                        ├─ STILTS（Java）                      绘制正射投影图
                        └─ var/dustmaps.db（SQLite）、var/results/（生成的图片）
 ```
 
 网站里所有请求都是**相对于页面的地址**（`./api/v2/...`、`./files/...`），所以无论放在哪个路径下，只要 Nginx 在同一路径下转发 `api/` 和 `files/` 就能工作，不需要跨域配置。
 
-网站用到的后端接口：`POST api/v2/dust/query`、`POST api/v2/dust/batch`、`GET api/v2/dust/templates`、`POST api/v2/plots/car`、`POST api/v2/plots/sin`、`POST api/v2/bubbles/analyze`、`POST api/v2/bubbles/schematic`、`POST api/v2/extinction/coefficient`。
+网站用到的后端接口：`POST api/v2/dust/query`、`POST api/v2/dust/batch`、`GET api/v2/dust/templates`、`POST api/v2/plots/car`、`POST api/v2/plots/sin`、`POST api/v2/plots/dpr`、`POST api/v2/bubbles/analyze`、`POST api/v2/bubbles/schematic`、`POST api/v2/extinction/coefficient`。
 
 ## 2. 包内文件
 
@@ -51,13 +53,19 @@ dustmaps3d-nadc-deploy/
 │   ├── patches/0001-distance-dependent-sigma.patch   σ 补丁（已应用在上面的源码里，仅供查看或回退）
 │   └── tools/
 │       ├── prepare_data.py        data_v3.fits → data.parquet 转换（逐列校验）
+│       ├── grid3d/                三维网格的生成脚本（Data_preparation_1.py 原版 + 分块版 make_grid3d.py），只在要重新生成时用
 │       └── parity_test.py         可选：后端结果与 pip 包 dustmaps3d 逐点对照
+├── data/
+│   ├── grid3d.parquet.part1of8 … part8of8   斜剖面用的三维网格，拆成 8 份（GitHub 单文件上限 100 MB），4.4b 拼回
+│   ├── SHA256SUMS                 8 个分片和拼好后整份文件的校验和
+│   └── superbubble_final_fit_parameters.csv  30 个超级气泡的拟合参数（斜剖面叠加截面）
 ├── deploy/
 │   ├── nginx-dustmaps3d.conf      Nginx location 块（放进已有 server 块）
 │   ├── dustmaps3d-backend.service systemd 服务
 │   ├── env.production             后端配置，复制为 backend/.env
 │   ├── cleanup-results.sh         每小时删除 24 小时前生成的图片
-│   └── smoke_test.sh              部署后端到端验收（11 项检查）
+│   ├── assemble_grid3d.sh         拼接三维网格分片并校验 SHA-256
+│   └── smoke_test.sh              部署后端到端验收（12 项检查）
 └── site-src/                      网站源码（只在以后要修改网站时才用；部署不需要 Node）
 ```
 
@@ -71,8 +79,8 @@ dustmaps3d-nadc-deploy/
 | Python | 3.11 或 3.12（没有的话 uv 会自动安装 3.11） | `python3.11 --version` |
 | Java | 11 或更高（STILTS 需要） | `java -version` |
 | Nginx | 已在服务 nadc.china-vo.org | `nginx -v` |
-| 内存 | **≥ 8 GB 可用**。估算：计算进程要常驻两份模型表（12,582,912 行 × 21 列 float32，各约 1 GB），全天图计算时峰值更高 | `free -g` |
-| 磁盘 | ≥ 5 GB：数据 1.5 GB，Python 环境 0.5 GB，STILTS 0.05 GB，生成图片（每小时清理 24 小时前的） | `df -h /opt` |
+| 内存 | **≥ 12 GB 可用**。估算：计算进程要常驻两份模型表（12,582,912 行 × 21 列 float32，各约 1 GB），全天图计算时峰值更高；斜剖面再常驻三维网格（72,000,000 行 × 4 列 float32，约 1.2 GB），单次出图峰值约 3.7 GB | `free -g` |
+| 磁盘 | ≥ 6 GB：数据 1.5 GB，三维网格 0.3 GB（分片另占 0.3 GB，拼好后可删），Python 环境 0.5 GB，STILTS 0.05 GB，生成图片（每小时清理 24 小时前的） | `df -h /opt` |
 | 网络（仅部署时） | 能访问 PyPI（或国内镜像）、`www.star.bristol.ac.uk`、`nadc.china-vo.org` | |
 
 ## 4. 部署步骤
@@ -149,6 +157,25 @@ sudo -u dustmaps /opt/dustmaps3d/backend/.venv/bin/python /opt/dustmaps3d/tools/
 
 预期最后一行：`wrote /opt/dustmaps3d/data/data.parquet (517 MB, 12582912 rows, 21 columns)`。转换时内存峰值约 3 GB，耗时约 15 秒到 1 分钟。
 
+### 4.4b 拼接三维网格、放好超级气泡表
+
+```bash
+sh "$PKG/deploy/assemble_grid3d.sh" "$PKG/data" /opt/dustmaps3d/data/grid3d.parquet
+cp "$PKG/data/superbubble_final_fit_parameters.csv" /opt/dustmaps3d/data/
+chown dustmaps:dustmaps /opt/dustmaps3d/data/grid3d.parquet /opt/dustmaps3d/data/superbubble_final_fit_parameters.csv
+```
+
+预期：8 行 `OK`，最后一行 `wrote /opt/dustmaps3d/data/grid3d.parquet (331168850 bytes, SHA-256 OK)`。
+
+`grid3d.parquet` 是银心坐标（以太阳为原点，X 指向银心）里 |X|,|Y| ≤ 3 kpc、|Z| ≤ 1 kpc、步长 0.01 kpc 的尘埃密度网格（mag/kpc，σ = 2 格高斯平滑），由 `backend/tools/grid3d/Data_preparation_1.py`（王涛，2026-01-09）的算法生成。分片丢失或校验失败时可以在服务器上重新生成（约 2 分钟、内存峰值约 7.5 GB；需要 pip 包 dustmaps3d 能找到 data_v3.fits，方法见第 8 节的对照测试）：
+
+```bash
+cd /opt/dustmaps3d/tools/grid3d
+sudo -u dustmaps /opt/dustmaps3d/backend/.venv/bin/python make_grid3d.py /opt/dustmaps3d/data/grid3d.parquet
+```
+
+`make_grid3d.py` 只是把原脚本的 dustmaps3d 查询按 X 分块做，以免一次处理 7200 万个点；在小网格上与原脚本逐位一致（`make_grid3d.py /dev/null --check`）。
+
 ### 4.5 安装 STILTS
 
 ```bash
@@ -204,10 +231,10 @@ curl -s http://127.0.0.1:58123/health/ready; echo
 预期：
 
 ```json
-{"status":"ready","database":"connected","datasets":{"dust":true,"slices":false,"dustmaps_fits":true}}
+{"status":"ready","database":"connected","datasets":{"dust":true,"slices":true,"dustmaps_fits":true}}
 ```
 
-`"slices": false` 是正常的：那是本网站不用的斜剖面数据。`dust` 或 `dustmaps_fits` 为 `false` 时，检查 `.env` 里的数据路径，以及 dustmaps 用户能否读这两个文件。
+`dust`、`slices` 或 `dustmaps_fits` 为 `false` 时，检查 `.env` 里的数据路径，以及 dustmaps 用户能否读这些文件（`slices` 对应 4.4b 的 `grid3d.parquet`）。
 
 再直接测一遍后端（不经过 Nginx，约 30 秒）：
 
@@ -215,7 +242,7 @@ curl -s http://127.0.0.1:58123/health/ready; echo
 sh /opt/dustmaps3d/deploy/smoke_test.sh http://127.0.0.1:58123 --backend-only
 ```
 
-预期最后一行是 `ALL CHECKS PASSED`。第一次请求要把模型数据载入内存，会多花几秒。
+预期最后一行是 `ALL CHECKS PASSED`。第一次请求要把模型数据载入内存，会多花几秒（斜剖面第一次约 4 秒）。
 
 ### 4.10 Nginx
 
@@ -246,14 +273,14 @@ chmod 644 /etc/cron.d/dustmaps3d
 sh /opt/dustmaps3d/deploy/smoke_test.sh https://nadc.china-vo.org/data/dustmaps3d
 ```
 
-预期 11 行 `PASS`，加一行 `PASS  public bubble saving is blocked (403)`，最后一行 `ALL CHECKS PASSED`。这一步经过 Nginx，和浏览器的访问路径完全相同。
+预期 12 行 `PASS`，加一行 `PASS  public bubble saving is blocked (403)`，最后一行 `ALL CHECKS PASSED`。这一步经过 Nginx，和浏览器的访问路径完全相同。
 
 然后用浏览器打开 `https://nadc.china-vo.org/data/dustmaps3d/`，人工点一遍：
 
 1. 首页正常显示，背景是可滚动的 3D 银河。
 2. 01「消光查询」→ 点示例「Orion · l=209 b=-19 d=0.4」→ E(B−V) 显示 **0.0295 mag**。
 3. 01「批量查询」→「示例」→「运行批量」→ 表格出现 6 行。
-4. 02「进入工具」→「生成消光图」→ 默认全天图约 25 秒后出现。
+4. 02「进入工具」→「生成消光图」→ 默认全天图约 25 秒后出现。再点「斜剖面投影」→「生成消光图」→ 几秒后出现 θ = 60° 的竖直剖面，上面画着 SB10、SB12 等超级气泡截面。
 5. 03「进入工具」→「示例」→「生成三图并合成」→ 约 40 秒后出现三联图、分析图、示意图和「下载合成图」。
 6. 页面底部「资源」区 →「红化系数说明与在线工具箱」→ 2024 工具箱选 G →「计算」→ A(G) = **0.7434 mag**。
 
@@ -277,7 +304,7 @@ sh /opt/dustmaps3d/deploy/smoke_test.sh https://nadc.china-vo.org/data/dustmaps3
 ```bash
 cd site-src
 pnpm install
-pnpm test        # 103 项单测
+pnpm test        # 104 项单测
 pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d/site/
 ```
 
@@ -290,6 +317,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 | 页面能打开，工具里提示「无法连接后端服务」 | Nginx 的 `api/` 转发没生效，或后端没在运行 | `curl -s http://127.0.0.1:58123/health/ready`；`curl -s -X POST https://站点/data/dustmaps3d/api/v2/dust/query -H 'Content-Type: application/json' -d '{"coord1":209,"coord2":-19.4,"d":0.4}'` |
 | 页面空白，静态文件 404 | 访问的是不带结尾斜杠的 `/data/dustmaps3d`，或 alias 路径少了结尾 `/` | 确认 `location = /data/dustmaps3d { return 301 ...; }` 存在，alias 写成 `/opt/dustmaps3d/site/`（带斜杠） |
 | `nginx -t` 报 `zero size shared memory zone "dustmaps3d_api"` | 漏了 http 层级那行 `limit_req_zone` | 见 4.10 第 1 步 |
+| 斜剖面投影报 503 “dataset or dependency is unavailable” | `.env` 里 `DUSTMAPS_DUST_3D_PATH` 或 `DUSTMAPS_SUPERBUBBLE_PATH` 指向的文件不存在 | 重做 4.4b；`/health/ready` 的 `slices` 应为 `true`。不勾「叠加超级气泡截面」也报错就是网格的问题 |
 | 正射图、尘泡绘报 503，提示 “dataset or dependency is unavailable”；笛卡尔图正常 | 后端找不到 STILTS 或 java | `sudo -u dustmaps /opt/dustmaps3d/stilts/stilts -version`；java 路径写进包装脚本，或加到 service 的 `PATH=` |
 | 所有查询都报 503 “dataset … unavailable” | `.env` 数据路径不对，或没有读权限 | `/health/ready` 看 `dust`、`dustmaps_fits`；`sudo -u dustmaps ls -l /opt/dustmaps3d/data/` |
 | 出图到一半报 504 | Nginx 代理超时太短 | `proxy_read_timeout 300s` |
@@ -305,7 +333,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 - **σ 补丁（已应用）**：原版后端对任何距离都返回整条视线的总 `sigma`。pip 包 dustmaps3d 按距离分段取值：d < 1 kpc 取 min(sigma, sigma_0_2)；1–2 kpc 再加入 sigma_1_4；2–4 kpc 取 min(sigma_1_4, sigma_2_max)；≥ 4 kpc 取 sigma_2_max；后两段缺值时退回 sigma。补丁让后端与 pip 包一致，只改 `dustmaps_backend/science.py` 一处，并新增一条单元测试。要恢复原版行为：在 `/opt/dustmaps3d/backend` 里执行 `git apply -R /path/to/0001-distance-dependent-sigma.patch`（目录不是 git 仓库也能用），然后重启服务。
 - **对照结果**（本地 1200 条随机视线）：E(B−V)、σ、最大可信距离与 pip 包一致；尘埃密度相对差 ≤ 4×10⁻⁶，这是 float32 模型数据本身的精度。恰好落在 HEALPix 像素边界上的整数坐标（如 l=90°, b=0°）可能分到相邻像素：后端用 healpy，pip 包用 astropy_healpix；随机坐标不会碰到。复查方法：`.venv/bin/python /opt/dustmaps3d/tools/parity_test.py --base-url http://127.0.0.1:58123`（需要先让 pip 包找到数据：`mkdir -p ~dustmaps/.local/share/dustmaps3d && ln -s /opt/dustmaps3d/data/data_v3.fits ~dustmaps/.local/share/dustmaps3d/`，再以 dustmaps 用户运行）。
 - **红化系数**：两套工具箱的结果与 NADC 线上 `/data/dustmaps/toolkit` 逐位一致。
-- 网站只用笛卡尔和正射两种投影；斜剖面、正交切片和 3D viewer 的数据没有配置，对应接口返回 503，网站不会调用。
+- 网站用笛卡尔、正射和斜剖面三种投影；正交切片（`/plots/ort`）和 3D viewer 没有配置，网站不会调用。斜剖面的颜色缩放固定为 log（后端只接受 log）。
 - 02 全天图和 03 尘泡绘画的是 d_min–d_max 区间内的**平均尘埃密度**（mag/kpc），不是累积 E(B−V)。
 
 ## 9. 部署完成后
@@ -314,7 +342,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 
 ## 版本
 
-- 网站：2026-10-14 构建，源码见 `site-src/`（本次更新：联系区加成员贡献；07 加 Citations 引用论文列表（ADS 34 篇）；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带）。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
+- 网站：2026-10-16 构建，源码见 `site-src/`（本次更新：02 加第三种投影「斜剖面投影」，可叠加超级气泡截面；后端需要 4.4b 的两份数据）。上一次（2026-10-14）：联系区加成员贡献；07 加 Citations 引用论文列表（ADS 34 篇）；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
 - 后端：SunnyHina/dustmaps3d-backend @ `564cfb8`，加 `0001-distance-dependent-sigma.patch`
-- 数据：dustmaps3d `data_v3.fits`（HEALPix Nside = 1024，RING 排序，12,582,912 行）
-- 本地验收（macOS，Python 3.11.15，Java 11，STILTS 3.5-6）：后端测试 10/10，前端测试 103/103，`smoke_test.sh` 在模拟的 `/data/dustmaps3d/` 子路径下 11/11 通过。Nginx 配置文件未在真实 Nginx 上做过 `nginx -t`，请在 4.10 步执行。
+- 数据：dustmaps3d `data_v3.fits`（HEALPix Nside = 1024，RING 排序，12,582,912 行）；斜剖面网格 `grid3d.parquet`（72,000,000 行，SHA-256 `6e2fadef…`）；超级气泡参数表 30 行
+- 本地验收（macOS，Python 3.11.15，Java 11，STILTS 3.5-6）：后端测试 10/10，前端测试 104/104，`smoke_test.sh --backend-only` 10/10 通过（2026-10-16，含斜剖面）；上一次在模拟的 `/data/dustmaps3d/` 子路径下 11/11 通过。Nginx 配置文件未在真实 Nginx 上做过 `nginx -t`，请在 4.10 步执行。

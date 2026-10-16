@@ -45,6 +45,42 @@ export function sinRequest(f) {
 }
 
 /**
+ * Form → body of POST /plots/dpr (a vertical oblique slice through the 3D grid).
+ * The slice plane's horizontal direction makes angle θ with +X (towards the Galactic
+ * centre) and lies `offset` kpc from the Sun; the backend always uses a log colour scale.
+ */
+export function dprRequest(f) {
+  const vmin = requiredNumber(f.vmin);
+  const vmax = requiredNumber(f.vmax);
+  if (vmin >= vmax) throw new InputError('errColorRange');
+  if (vmin <= 0) throw new InputError('errLogMin');
+  const halfWidth = requiredNumber(f.halfWidth);
+  if (halfWidth <= 0) throw new InputError('errHalfWidth');
+  const sMin = requiredNumber(f.smin);
+  const sMax = requiredNumber(f.smax);
+  const zMin = requiredNumber(f.zmin);
+  const zMax = requiredNumber(f.zmax);
+  if (sMin >= sMax || zMin >= zMax) throw new InputError('errSliceRange');
+  const angle = requiredNumber(f.angle);
+  if (Math.abs(angle) > 360) throw new InputError('errAngle');
+  return {
+    angle_degrees: angle,
+    offset: requiredNumber(f.offset),
+    half_width: halfWidth,
+    s_range_min: sMin,
+    s_range_max: sMax,
+    z_range_min: zMin,
+    z_range_max: zMax,
+    norm: 'log',
+    vmin,
+    vmax,
+    colormap: f.cmap,
+    show_markers: Boolean(f.origin),
+    show_superbubbles: Boolean(f.bubbles),
+  };
+}
+
+/**
  * The bubble plotter's three orthographic panels, as the NADC page builds them:
  * the chosen shell [d_min, d_max] in the middle, flanked by equally thick shells
  * just in front of it and just behind it. FOV = 2.5 × bubble diameter (≤ 180°).

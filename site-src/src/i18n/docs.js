@@ -30,7 +30,7 @@ export const TOOL_DOCS = {
       steps: [
         [
           '选择投影',
-          '笛卡尔投影填坐标系与经纬范围；正射投影填中心坐标与视场 FOV。',
+          '笛卡尔投影填坐标系与经纬范围；正射投影填中心坐标与视场 FOV；斜剖面投影填切片方向角、偏移与半厚度（见下）。',
         ],
         [
           '设定距离区间',
@@ -44,6 +44,8 @@ export const TOOL_DOCS = {
       caveats: [
         '颜色缩放为 log 时，颜色编码范围的最小值须大于 0。',
         '天区越大出图越慢，全天图需要十几秒；图片可在新窗口打开或下载 PNG。',
+        '斜剖面投影：在以太阳为原点的银心坐标（X 指向银心、Y 指向银河旋转方向，单位 kpc）里取一张竖直切面，其水平方向与 X 轴夹角 θ，与太阳的垂直距离为 offset；只用切面两侧半厚度内的格点，数据范围 |X|,|Y| ≤ 3 kpc、|Z| ≤ 1 kpc。横轴 T 从太阳在切面上的垂足（原点 +）量起。',
+        '超级气泡截面为超级气泡拟合参数表中 30 个超级气泡与该切面的交线，标注 SB 编号。',
       ],
     },
     batch: {
@@ -137,7 +139,7 @@ export const TOOL_DOCS = {
       steps: [
         [
           'Pick a projection',
-          'Cartesian takes a frame and longitude/latitude ranges; orthographic takes a centre and a field of view.',
+          'Cartesian takes a frame and longitude/latitude ranges; orthographic takes a centre and a field of view; the oblique slice takes a direction, an offset and a half-thickness (see below).',
         ],
         [
           'Set the distance shell',
@@ -151,6 +153,8 @@ export const TOOL_DOCS = {
       caveats: [
         'With a log color scale the color-range minimum must be above 0.',
         'Larger regions take longer — an all-sky map needs a dozen seconds; open the image in a new tab or download the PNG.',
+        'Oblique slice: in Sun-centred Galactic coordinates (X towards the Galactic centre, Y along rotation, kpc) it cuts a vertical plane whose horizontal direction makes angle θ with X and which lies offset kpc from the Sun; only grid cells within the half-thickness are used, over |X|,|Y| ≤ 3 kpc and |Z| ≤ 1 kpc. T is measured from the foot of the perpendicular from the Sun (the + origin).',
+        'Superbubble cross-sections are where the 30 fitted superbubbles in the parameter table meet the slice, labelled with their SB numbers.',
       ],
     },
     batch: {

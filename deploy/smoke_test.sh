@@ -5,7 +5,7 @@
 #   sh smoke_test.sh http://127.0.0.1:58123 --backend-only     # the backend alone, before nginx
 #
 # Needs curl and python3. Prints PASS/FAIL per check and exits non-zero on any FAIL.
-# Takes about 30 s (it draws two small maps and one bubble analysis).
+# Takes about 40 s (it draws two small maps, one oblique slice and one bubble analysis).
 set -u
 BASE="${1:?usage: smoke_test.sh <site URL without trailing slash> [--backend-only]}"
 BASE="${BASE%/}"
@@ -78,6 +78,11 @@ code=$(post /api/v2/plots/sin '{"coord_system":"galactic","lon_center":209,"lat_
 url=$(json "d['url']")
 if [ "$code" = 200 ] && png_at "$url"; then pass "orthographic map (STILTS) -> $url"
 else fail "orthographic map (HTTP $code, body: $(head -c 300 "$TMP/out")) — 503 here usually means STILTS/java is not found"; fi
+
+code=$(post /api/v2/plots/dpr '{"angle_degrees":60,"offset":0.3,"half_width":0.1,"s_range_min":-3,"s_range_max":3,"z_range_min":-0.5,"z_range_max":0.5,"norm":"log","vmin":0.05,"vmax":1,"colormap":"Spectral_r","show_markers":true,"show_superbubbles":true}')
+url=$(json "d['url']")
+if [ "$code" = 200 ] && png_at "$url"; then pass "oblique slice + superbubbles -> $url"
+else fail "oblique slice (HTTP $code, body: $(head -c 300 "$TMP/out")) — 503 here means grid3d.parquet or the superbubble CSV is missing"; fi
 
 code=$(post /api/v2/bubbles/analyze '{"l":209,"b":-19.4,"d":0.4,"d_low":0.3,"d_up":0.5,"diameter":4}')
 url=$(json "d['url']")

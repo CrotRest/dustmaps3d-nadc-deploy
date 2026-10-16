@@ -12,7 +12,7 @@ import {
   templateUrl,
 } from '../src/data/api.js';
 import { batchInputCsv, formatBatchRows, parseCsv } from '../src/lib/batch.js';
-import { bubbleRequests, carRequest, sinRequest } from '../src/lib/plotParams.js';
+import { bubbleRequests, carRequest, dprRequest, sinRequest } from '../src/lib/plotParams.js';
 import { formatSightline, resolveSightline } from '../src/lib/sightline.js';
 import { InputError } from '../src/lib/parse.js';
 import { parseRich } from '../src/components/ui/RichText.jsx';
@@ -155,6 +155,17 @@ describe('plot requests', () => {
     expect(() => carRequest({ ...base, vmin: '0' })).toThrow('errLogMin');
     expect(() => carRequest({ ...base, vmin: '2' })).toThrow('errColorRange');
     expect(() => carRequest({ ...base, dmin: '2' })).toThrow('errDistRange');
+  });
+  it('the oblique slice body follows DprPlot (log scale only)', () => {
+    const dpr = { angle: '60', offset: '0.3', halfWidth: '0.1', smin: '-3', smax: '3', zmin: '-0.5', zmax: '0.5', origin: true, bubbles: false, vmin: '0.05', vmax: '1', cmap: 'magma' };
+    expect(dprRequest(dpr)).toEqual({
+      angle_degrees: 60, offset: 0.3, half_width: 0.1, s_range_min: -3, s_range_max: 3, z_range_min: -0.5, z_range_max: 0.5,
+      norm: 'log', vmin: 0.05, vmax: 1, colormap: 'magma', show_markers: true, show_superbubbles: false,
+    });
+    expect(() => dprRequest({ ...dpr, vmin: '0' })).toThrow('errLogMin');
+    expect(() => dprRequest({ ...dpr, halfWidth: '0' })).toThrow('errHalfWidth');
+    expect(() => dprRequest({ ...dpr, zmax: '-1' })).toThrow('errSliceRange');
+    expect(() => dprRequest({ ...dpr, angle: '400' })).toThrow('errAngle');
   });
   it('the bubble plotter builds near / middle / far shells like the NADC page', () => {
     const r = bubbleRequests({ l: '209', b: '-19.4', dia: '8', dmin: '0.3', dmax: '0.5', mark: true, markColor: 'black', ...style });

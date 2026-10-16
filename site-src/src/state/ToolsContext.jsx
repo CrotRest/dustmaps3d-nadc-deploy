@@ -34,7 +34,11 @@ const initialState = {
       lc: '0', bc: '0', fov: '30', dmin: '0.5', dmax: '1', mark: true, markColor: 'black',
       ...plotStyle({ vmin: '0.01', vmax: '1', scale: 'log' }),
     },
-    results: { car: null, sin: null }, // { url, filename, caption }
+    dpr: {
+      angle: '60', offset: '0.3', halfWidth: '0.1', smin: '-3', smax: '3', zmin: '-0.5', zmax: '0.5',
+      origin: true, bubbles: true, vmin: '0.05', vmax: '1', cmap: 'Spectral_r',
+    },
+    results: { car: null, sin: null, dpr: null }, // { url, filename, caption }
     busy: null, // projection being drawn
     error: null,
   },
