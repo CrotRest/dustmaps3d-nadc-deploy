@@ -648,7 +648,6 @@ export function createHud(canvas) {
 
   /** 04: reticle locks on to the star, the camera zooms in (R.zoom), then the star dims and reddens. */
   function drawReddening(a, R, P) {
-    const narrow = W < 600;
     const p = P.skyPoint(vecOf(RED_STAR.l, RED_STAR.b));
     if (!p.visible) return;
     // after the zoom, the distance to the star sweeps out, holds, and comes back
@@ -705,16 +704,6 @@ export function createHud(canvas) {
       ctx.arc(p.x, p.y, 22 + 70 * e, 0, 7);
       ctx.stroke();
     }
-    // tag above the reticle: what is locked, and the zoom
-    ctx.shadowColor = 'rgba(3,4,11,0.9)';
-    ctx.shadowBlur = 6;
-    ctx.font = `500 ${narrow ? 9 : 10}px ${MONO}`;
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = locked ? rgba(GOLD, 1) : rgba(INK, 0.85);
-    const tag = locked ? (zoom > 0.02 ? `LOCKED · ZOOM ×${Math.max(1, R.mag).toFixed(1)}` : 'LOCKED') : 'ACQUIRING…';
-    ctx.fillText(tag, p.x - size, p.y - size - 8);
-    ctx.shadowBlur = 0;
-
     ctx.restore();
   }
 

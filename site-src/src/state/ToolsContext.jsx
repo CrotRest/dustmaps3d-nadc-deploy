@@ -65,8 +65,12 @@ const initialState = {
     angValues: { size: '', sizeUnit: 'kpc', dist: '', distUnit: 'kpc', theta: '', thetaUnit: 'deg', distRev: '', distRevUnit: 'kpc' },
     angRows: null,
     angError: null,
-    text: '',
-    textStats: null,
+    magMode: 'toAbs',
+    magValues: { m: '', M: '', dist: '', distUnit: 'pc', ext: 'none', A: '', frame: 'galactic', l: '', b: '', ra: '', dec: '', band: 'GAIA3.G', teff: '5500' },
+    magRows: null,
+    magNote: null,
+    magError: null,
+    magBusy: false,
   },
 };
 

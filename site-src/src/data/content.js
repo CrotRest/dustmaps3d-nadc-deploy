@@ -53,7 +53,8 @@ export const MARK_COLORS = ['black', 'white', 'red', 'blue', 'green', 'yellow'];
 
 /**
  * Filters of the two reddening toolboxes, grouped as in dustmaps3d-backend
- * (toolkit.FILTER_GROUPS / FILTER_GROUPS_2023): [id the API takes, label].
+ * (toolkit.FILTER_GROUPS / FILTER_GROUPS_2023): [id the API takes, label]. WISE W3/W4 are
+ * left out of 2024: XP_Extinction_Toolkit's curve stops at 5.1 µm, so it returns NaN for them.
  */
 export const FILTERS_2024 = [
   { sys: 'Johnson', bands: [['Johnson.U', 'U'], ['Johnson.B', 'B'], ['Johnson.V', 'V'], ['Johnson.R', 'R']] },
@@ -61,7 +62,7 @@ export const FILTERS_2024 = [
   { sys: 'SDSS', bands: ['u', 'g', 'r', 'i', 'z'].map((b) => [`SDSS.${b}`, `${b}′`]) },
   { sys: 'Pan-STARRS1', bands: ['g', 'r', 'i', 'z', 'y'].map((b) => [`PS1.${b}`, b]) },
   { sys: '2MASS', bands: [['2MASS.J', 'J'], ['2MASS.H', 'H'], ['2MASS.Ks', 'Ks']] },
-  { sys: 'WISE', bands: [1, 2, 3, 4].map((i) => [`WISE.W${i}`, `W${i}`]) },
+  { sys: 'WISE', bands: [1, 2].map((i) => [`WISE.W${i}`, `W${i}`]) },
   { sys: 'Wavelength', bands: [['440', '440nm'], ['550', '550nm']] },
 ];
 

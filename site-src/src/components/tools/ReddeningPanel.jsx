@@ -6,6 +6,7 @@ import { extinctionCoefficient } from '../../data/api.js';
 import { FILTERS_2023, FILTERS_2024 } from '../../data/content.js';
 import Segmented from '../ui/Segmented.jsx';
 import ReferenceDoc from './ReferenceDoc.jsx';
+import RichText from '../ui/RichText.jsx';
 import { errorText } from './errorText.js';
 import './reference.css';
 
@@ -132,7 +133,9 @@ function Toolbox({ model }) {
           </div>
         )}
       </div>
-      <p className="toolbox__cite">{tx[model].cite}</p>
+      <p className="toolbox__cite">
+        <RichText text={tx[model].cite} />
+      </p>
       {tx[model].note && <p className="toolbox__cite toolbox__cite--warn">{tx[model].note}</p>}
     </section>
   );

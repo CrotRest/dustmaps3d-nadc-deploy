@@ -12,7 +12,6 @@ import { fmt, fmtDms, fmtHms } from '../src/lib/format.js';
 import { resolveSightline } from '../src/lib/sightline.js';
 import { convertCoordinates, coordSections } from '../src/lib/coordConvert.js';
 import { angularDiameterRows, physicalDiameterRows } from '../src/lib/units.js';
-import { textStats } from '../src/lib/textStats.js';
 import { InputError } from '../src/lib/parse.js';
 import { STRINGS } from '../src/i18n/strings.js';
 import { TOOL_DOCS } from '../src/i18n/docs.js';
@@ -114,18 +113,12 @@ describe('coordinate converter', () => {
   });
 });
 
-describe('angular size & text utilities', () => {
+describe('angular size utility', () => {
   it.each(golden.ang)('$mode conversion', ({ mode, a, rows }) => {
     const out = mode === 'size'
       ? angularDiameterRows(num(a.sizeValue), a.sizeUnit, num(a.angDist), a.angDistUnit)
       : physicalDiameterRows(num(a.thetaValue), a.thetaUnit, num(a.angDistReverse), a.angDistReverseUnit);
     expect(out).toEqual(rows);
-  });
-  it.each(golden.text)('text stats ($lang) for %j', ({ lang, s, rows }) => {
-    const t = STRINGS[lang];
-    const st = textStats(s);
-    const got = [[t.tcTotal, st.total], [t.tcWords, st.words], [t.tcCjk, st.cjk], [t.tcLetters, st.letters], [t.tcNoSpace, st.nonSpace]].map(([k, v]) => ({ k, v: String(v) }));
-    expect(got).toEqual(rows);
   });
 });
 
@@ -164,14 +157,13 @@ describe('copy & content', () => {
   });
   it('tool docs are the design copy', () => {
     for (const lang of ['zh', 'en']) {
-      // query, plot and batch were rewritten for the backend; the utilities keep the design copy
-      for (const m of ['tools']) {
-        const g = golden.docs[lang][m];
-        const d = TOOL_DOCS[lang][m];
-        expect(d.intro).toBe(g.intro);
-        expect(d.steps.map(([t, desc], i) => ({ n: i + 1, t, d: desc }))).toEqual(g.steps);
-        expect(d.caveats).toEqual(g.caveats);
-      }
+      // query, plot and batch were rewritten for the backend; the utilities keep the design
+      // copy, except that text stats gave way to the magnitude converter (2026-10-19)
+      const g = golden.docs[lang].tools;
+      const d = TOOL_DOCS[lang].tools;
+      expect(d.steps.slice(0, 2).map(([t, desc], i) => ({ n: i + 1, t, d: desc }))).toEqual(g.steps.slice(0, 2));
+      expect(d.steps).toHaveLength(3);
+      expect(d.caveats[0]).toBe(g.caveats[0]);
     }
   });
   it('code snippet and BibTeX match', () => {

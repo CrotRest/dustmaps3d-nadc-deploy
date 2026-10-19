@@ -27,7 +27,7 @@ pnpm preview    # 本地预览 dist/（同样转发到后端）
 - **Vercel / Netlify**：构建命令 `pnpm build`，输出目录 `dist`。
 - **Nginx / 课题组服务器**：把 `dist/` 拷到站点目录即可。`assets/` 下的文件名带内容哈希，可以设长缓存；`index.html` 和 `dustmap/` 建议短缓存。
 
-体积约 38 MB，其中约 29 MB 是思源宋体 4 个字重的分片文件（按 unicode-range 切成约 100 片/字重），浏览器只下载页面实际用到的字的分片，完整滚动一遍约 1.3 MB。其余大头是 02 全天图的数据图集 `dustmap/atlas.png`（约 6 MB，页面加载几秒后或滚近 02 时才下载）。three.js 单独打包、页面文字渲染后再加载（约 144 KB gzip）。字体打包在本地，不依赖 Google Fonts，国内访问不受影响。
+体积约 56 MB，其中约 29 MB 是思源宋体 4 个字重的分片文件（按 unicode-range 切成约 100 片/字重），浏览器只下载页面实际用到的字的分片，完整滚动一遍约 1.3 MB。其余大头是 02 全天图的数据图集 `dustmap/atlas-0…3.png`（共约 24 MB，页面加载几秒后或滚近 02 时才下载）。three.js 单独打包、页面文字渲染后再加载（约 144 KB gzip）。字体打包在本地，不依赖 Google Fonts，国内访问不受影响。
 
 ## 后端接口
 
@@ -97,8 +97,8 @@ python3 -m http.server 8801 -d design
 ## 素材来源
 
 - 设计稿、logo：通过 Claude Design MCP 导入，按字节还原。
-- 02 全天图：来自课题组的 `dust.mp4`（银道坐标 Mollweide，ΔE(B−V) [mmag/pc]，400 帧，d = 0.1×200^(n/399) kpc）。`scripts/extract-dustmap.py` 每 4 帧取 1 帧，按图中色标把颜色反解回 log ΔE(B−V)，逆投影到 320×160 的 (l, b) 网格；图上自带的经纬线和经度文字所在像素不参与采样，用邻域取值补齐；灰色（无数据）记为 0。重新生成：
+- 02 全天图：由 dustmaps3d 模型（Wang et al. 2025，data_v3.fits）直接计算。`scripts/build-dustmap-model.py` 在 0.3–1.8 kpc 取 40 个对数等距的距离壳层，先在 5120×2560（0.07°/格）的 (l, b) 细网格上算壳层平均 ΔE(B−V)/Δd [mmag/pc]，做 σ = 0.1° 的高斯平滑，再 4×4 平均到 1280×640（0.28°/格），按 log 值编码成 8 位灰度，每 10 片竖排存一张 PNG（`atlas-0…3.png`，各 1280×6400，低于 iOS 画布上限），前端合成一张纹理数组；全天约 52 万个粒子（手机按档位减少）。重新生成（用后端的环境）：
 
   ```bash
-  python3 scripts/extract-dustmap.py ../dust.mp4 public/dustmap/atlas.png public/dustmap/atlas.json
+  ../dustmaps3d-backend/.venv/bin/python scripts/build-dustmap-model.py public/dustmap
   ```

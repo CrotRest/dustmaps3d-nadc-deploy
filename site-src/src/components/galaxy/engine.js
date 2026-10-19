@@ -17,7 +17,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { ARM_K, ARM_R_REF, BAR_ANGLE, PATTERN_SPEED, SUN_OMEGA, buildGalaxy, dustShearTime, galDir } from './model.js';
-import { RED_LOCK_S, RED_ZOOM_S, cameraAt, redFov, effectsAt, measureAnchors, mollRect, shotAt } from './shots.js';
+import { RED_LOCK_S, RED_ZOOM_S, cameraAt, effectsAt, measureAnchors, mollRect, shotAt } from './shots.js';
 import { coreFragment, coreVertex, diskFragment, diskVertex, irHazeFragment, pointFragment, pointVertex } from './shaders.js';
 import { createDustSky } from './dustSky.js';
 import { demoBus } from './demoBus.js';
@@ -430,7 +430,7 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
       renderer.render(scene, camera);
     }
     const lock = reduced ? 1 : Math.min(1, red.t / RED_LOCK_S);
-    hud.draw({ fx, t: reduced ? t : hudTime, P: helpers(rig.frame), map: { ...grown, grow: e, ready: dust.ready && !DEV_NODUST, kpc: dust.kpc }, red: { lock, zoom: red.zoom, since: red.t - RED_LOCK_S - RED_ZOOM_S, mag: Math.tan((redFov(mob, 0) * DEG) / 2) / Math.tan((rig.fov * DEG) / 2) }, frozen: reduced });
+    hud.draw({ fx, t: reduced ? t : hudTime, P: helpers(rig.frame), map: { ...grown, grow: e, ready: dust.ready && !DEV_NODUST, kpc: dust.kpc }, red: { lock, zoom: red.zoom, since: red.t - RED_LOCK_S - RED_ZOOM_S }, frozen: reduced });
 
     if (!reduced) watchPerf(realDt);
   }

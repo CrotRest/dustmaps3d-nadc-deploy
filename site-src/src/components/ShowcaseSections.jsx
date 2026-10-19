@@ -75,7 +75,7 @@ export function ToolsBoxSection() {
         <div className="kicker">05</div>
         <h2 className="section-title">{t.toolsTitle}</h2>
         <ol className="bcp__points">
-          {[t.tabCoord, t.tabAng, t.tabText].map((name, i) => (
+          {[t.tabCoord, t.tabAng, t.tabMag].map((name, i) => (
             <li key={name}>
               <span className="bcp__num" aria-hidden="true">
                 {String(i + 1).padStart(2, '0')}

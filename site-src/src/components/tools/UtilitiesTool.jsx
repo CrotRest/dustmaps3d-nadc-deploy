@@ -1,11 +1,17 @@
+import { useRef } from 'react';
 import { useLang } from '../../i18n/LangContext.jsx';
 import { toUiError, useTools } from '../../state/ToolsContext.jsx';
 import { convertCoordinates, coordSections } from '../../lib/coordConvert.js';
 import { OBLIQUITY_DEG } from '../../lib/coords.js';
 import { requiredNumber } from '../../lib/parse.js';
-import { textStats } from '../../lib/textStats.js';
 import { angularDiameterRows, physicalDiameterRows } from '../../lib/units.js';
+import { absoluteMag, apparentMag, distanceFromMags, distancePc, distanceRows } from '../../lib/magnitude.js';
+import { resolveSightline } from '../../lib/sightline.js';
+import { fmt } from '../../lib/format.js';
+import { extinctionCoefficient, queryExtinction } from '../../data/api.js';
+import { FILTERS_2024 } from '../../data/content.js';
 import Segmented from '../ui/Segmented.jsx';
+import RichText from '../ui/RichText.jsx';
 import { errorText } from './errorText.js';
 import './tools.css';
 
@@ -278,56 +284,192 @@ function AngularSize() {
   );
 }
 
-function TextStats() {
+function Magnitudes() {
   const { t } = useLang();
   const { state, update } = useTools();
+  const run = useRef(0);
   const u = state.utils;
-  const s = u.textStats;
-  const rows = s && [
-    [t.tcTotal, s.total],
-    [t.tcWords, s.words],
-    [t.tcCjk, s.cjk],
-    [t.tcLetters, s.letters],
-    [t.tcNoSpace, s.nonSpace],
+  const v = u.magValues;
+  const mode = u.magMode;
+  const field = (key) => ({
+    value: v[key],
+    onChange: (e) => update('utils', (s) => ({ magValues: { ...s.magValues, [key]: e.target.value } })),
+  });
+  const setValues = (patch) => update('utils', (s) => ({ magValues: { ...s.magValues, ...patch } }));
+  const clear = { magRows: null, magNote: null, magError: null };
+
+  // A_λ: none, typed, or E(B−V) from this map at (position, d) turned into A_λ by the 2024 toolbox
+  const extinction = async (dPc) => {
+    if (v.ext === 'none') return { A: 0 };
+    if (v.ext === 'manual') return { A: requiredNumber(v.A) };
+    const pos = resolveSightline(v.frame, { ...v, d: String(dPc / 1000) });
+    const teff = requiredNumber(v.teff);
+    const q = await queryExtinction(pos);
+    if (q.ebv == null) throw new Error('E(B−V) = null');
+    const r = await extinctionCoefficient({ use2023: false, mode: 'ext', band: v.band, ebv: Math.max(0, q.ebv), teff });
+    return {
+      A: r.result,
+      rows: [
+        { k: t.magEbv, v: `${fmt(q.ebv, 4)} ± ${fmt(q.sigma, 4)}` },
+        { k: `A_{λ} (${bandLabel(v.band)})`, v: fmt(r.result, 4) },
+      ],
+      warn: pos.d > q.maxDist ? t.warnMax.replace('{d}', fmt(q.maxDist, 2)) : null,
+    };
+  };
+
+  const compute = async () => {
+    const id = ++run.current;
+    update('utils', { ...clear, magBusy: true });
+    try {
+      let rows;
+      let ext;
+      if (mode === 'toDist') {
+        ext = await extinction(null);
+        const dPc = distanceFromMags(requiredNumber(v.m), requiredNumber(v.M), ext.A);
+        rows = distanceRows(dPc);
+      } else {
+        const dPc = distancePc(requiredNumber(v.dist), v.distUnit);
+        ext = await extinction(dPc);
+        rows =
+          mode === 'toAbs'
+            ? [{ k: 'M', v: fmt(absoluteMag(requiredNumber(v.m), dPc, ext.A), 4) }]
+            : [{ k: 'm', v: fmt(apparentMag(requiredNumber(v.M), dPc, ext.A), 4) }];
+        rows.push({ k: 'μ = 5 log₁₀(d / 10 pc)', v: distanceRows(dPc).at(-1).v });
+      }
+      if (v.ext !== 'none') rows.push(...(ext.rows || [{ k: 'A_{λ}', v: fmt(ext.A, 4) }]));
+      if (id === run.current) update('utils', { magRows: rows, magNote: ext.warn || null, magError: null, magBusy: false });
+    } catch (e) {
+      if (id === run.current) update('utils', { ...clear, magError: toUiError(e), magBusy: false });
+    }
+  };
+
+  const extOptions = [
+    { value: 'none', label: t.extNone },
+    { value: 'manual', label: t.extManual },
+    ...(mode === 'toDist' ? [] : [{ value: 'map', label: t.extMap }]),
   ];
   return (
     <div className="card">
-      <div className="split">
+      <Segmented
+        className="seg--wrap ang__mode"
+        label={t.tabMag}
+        value={mode}
+        onChange={(magMode) => {
+          update('utils', { magMode, ...clear });
+          if (magMode === 'toDist' && v.ext === 'map') setValues({ ext: 'manual' });
+        }}
+        options={[
+          { value: 'toAbs', label: t.magToAbs },
+          { value: 'toApp', label: t.magToApp },
+          { value: 'toDist', label: t.magToDist },
+        ]}
+      />
+      <div className="split split--start">
         <div>
-          <label htmlFor="textInput" className="field-label">
-            {t.inputText}
-          </label>
-          <textarea
-            id="textInput"
-            className="textarea text-tool__input"
-            value={u.text}
-            onChange={(e) => update('utils', { text: e.target.value })}
-          />
-          <div className="button-row">
-            <button type="button" className="btn-primary button-row__grow" onClick={() => update('utils', { textStats: textStats(u.text) })}>
-              {t.count}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => update('utils', { text: '', textStats: null })}>
-              {t.clear}
-            </button>
+          <div className={mode === 'toDist' ? 'field-pair' : 'mag__row3'}>
+            {mode !== 'toApp' && <Field id="magM" label={t.appMag} step="0.01" {...field('m')} />}
+            {mode !== 'toAbs' && <Field id="magAbs" label={t.absMag} step="0.01" {...field('M')} />}
+            {mode !== 'toDist' && (
+              <>
+                <Field id="magDist" label={t.distOrPlx} step="0.0001" {...field('dist')} />
+                <UnitSelect
+                  id="magDistUnit"
+                  label={t.unit}
+                  options={[['pc', 'pc'], ['kpc', 'kpc'], ['ly', 'ly'], ['mas', t.unitPlx]]}
+                  {...field('distUnit')}
+                />
+              </>
+            )}
           </div>
+          <div className="field-label mag__ext-label">
+            <RichText text={t.extLabel} />
+          </div>
+          <Segmented className="seg--wrap seg--sm" label={t.extLabel.replace(/_\{(.*?)\}/g, '$1')} value={v.ext} onChange={(ext) => setValues({ ext })} options={extOptions} />
+          {mode === 'toDist' && (
+            <p className="mag__hint">
+              <RichText text={t.extMapNoDist} />
+            </p>
+          )}
+          {v.ext === 'manual' && <Field id="magA" label={<RichText text="A_{λ} (mag)" />} step="0.001" {...field('A')} />}
+          {v.ext === 'map' && (
+            <div className="stack">
+              <div className="mag__row3">
+                <UnitSelect
+                  id="magFrame"
+                  label={t.frameLabel}
+                  options={[
+                    ['galactic', t.galactic],
+                    ['equatorial', t.equatorial],
+                  ]}
+                  {...field('frame')}
+                />
+                {v.frame === 'galactic' ? (
+                  <>
+                    <Field id="magL" label={t.lLabel} step="0.0001" {...field('l')} />
+                    <Field id="magB" label={t.bLabel} step="0.0001" {...field('b')} />
+                  </>
+                ) : (
+                  <>
+                    <Field id="magRa" label="RA (deg)" step="0.0001" {...field('ra')} />
+                    <Field id="magDec" label="Dec (deg)" step="0.0001" {...field('dec')} />
+                  </>
+                )}
+              </div>
+              <div className="field-pair">
+                <div>
+                  <label htmlFor="magBand" className="field-label">
+                    {t.magBand}
+                  </label>
+                  <select id="magBand" className="select" {...field('band')}>
+                    {FILTERS_2024.map((g) => (
+                      <optgroup key={g.sys} label={g.sys}>
+                        {g.bands.map(([id, label]) => (
+                          <option key={id} value={id}>
+                            {g.sys === 'Wavelength' ? label : `${g.sys} ${label}`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <Field id="magTeff" label="Teff (K)" step="10" {...field('teff')} />
+              </div>
+            </div>
+          )}
+          <button type="button" className="btn-primary tool-submit" onClick={compute} disabled={u.magBusy}>
+            {u.magBusy ? t.computing : t.compute}
+          </button>
         </div>
-        <Output label={t.output} empty={!rows} minHeight={160}>
-          {rows && (
+        <Output label={t.output} error={u.magError} empty={!u.magRows} minHeight={160}>
+          {u.magRows && (
             <div className="tile-grid">
-              {rows.map(([k, value]) => (
-                <div key={k} className="tile">
-                  <div className="tile__k">{k}</div>
-                  <div className="tile__v tile__v--big">{String(value)}</div>
+              {u.magRows.map((row) => (
+                <div key={row.k} className="tile">
+                  <div className="tile__k">
+                    <RichText text={row.k} />
+                  </div>
+                  <div className="tile__v">{row.v}</div>
                 </div>
               ))}
             </div>
           )}
+          {u.magNote && <div className="qr__warn mag__warn">⚠ {u.magNote}</div>}
+          <p className="mag__hint">
+            <RichText text={v.ext === 'map' ? `${t.magFormula} ${t.magMapNote}` : t.magFormula} />
+          </p>
         </Output>
       </div>
     </div>
   );
 }
+
+const bandLabel = (id) => {
+  for (const g of FILTERS_2024) {
+    const hit = g.bands.find(([b]) => b === id);
+    if (hit) return g.sys === 'Wavelength' ? hit[1] : `${g.sys} ${hit[1]}`;
+  }
+  return id;
+};
 
 export default function UtilitiesTool() {
   const { t } = useLang();
@@ -343,12 +485,12 @@ export default function UtilitiesTool() {
         options={[
           { value: 'coord', label: t.tabCoord },
           { value: 'angular', label: t.tabAng },
-          { value: 'text', label: t.tabText },
+          { value: 'mag', label: t.tabMag },
         ]}
       />
       {tab === 'coord' && <CoordConverter />}
       {tab === 'angular' && <AngularSize />}
-      {tab === 'text' && <TextStats />}
+      {tab === 'mag' && <Magnitudes />}
     </div>
   );
 }

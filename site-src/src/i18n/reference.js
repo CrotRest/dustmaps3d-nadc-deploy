@@ -177,10 +177,10 @@ export const REFERENCE = {
       ['toolbox', '2023'],
     ],
     toolbox: {
-      '2024': { title: '快速工具箱 · 2024（中值消光曲线）', cite: '如若使用到此红化系数，请引用 Zhang et al. (2024)' },
+      '2024': { title: '快速工具箱 · 2024（中值消光曲线）', cite: `如若使用到此红化系数，请引用 [Zhang et al. (2024)](${ZHANG2024_URL})，DOI: [10.3847/1538-4357/ad613e](https://doi.org/10.3847/1538-4357/ad613e)` },
       '2023': {
         title: '快速工具箱 · 2023（经验系数包）',
-        cite: '如若使用到此红化系数，请引用 Zhang et al. (2023)',
+        cite: `如若使用到此红化系数，请引用 [Zhang et al. (2023)](${ZHANG2023_URL})，DOI: [10.3847/1538-4365/ac9dfa](https://doi.org/10.3847/1538-4365/ac9dfa)`,
         note: '若 E(B−V) 来源于本 3D 消光图，请在输入该工具箱前先乘以 1/0.834 再计算，以修正与 SFD 的系统性差异。',
       },
       tabs: { '2024': '2024 工具箱', '2023': '2023 工具箱', guide: '方法说明' },
@@ -299,10 +299,10 @@ export const REFERENCE = {
       ['toolbox', '2023'],
     ],
     toolbox: {
-      '2024': { title: 'Quick toolbox · 2024 (median extinction curve)', cite: 'If you use these coefficients, please cite Zhang et al. (2024)' },
+      '2024': { title: 'Quick toolbox · 2024 (median extinction curve)', cite: `If you use these coefficients, please cite [Zhang et al. (2024)](${ZHANG2024_URL}), DOI: [10.3847/1538-4357/ad613e](https://doi.org/10.3847/1538-4357/ad613e)` },
       '2023': {
         title: 'Quick toolbox · 2023 (empirical coefficients)',
-        cite: 'If you use these coefficients, please cite Zhang et al. (2023)',
+        cite: `If you use these coefficients, please cite [Zhang et al. (2023)](${ZHANG2023_URL}), DOI: [10.3847/1538-4365/ac9dfa](https://doi.org/10.3847/1538-4365/ac9dfa)`,
         note: 'If your E(B−V) comes from this 3D map, multiply it by 1/0.834 before entering it here, to correct the systematic offset from SFD.',
       },
       tabs: { '2024': '2024 toolbox', '2023': '2023 toolbox', guide: 'Method' },

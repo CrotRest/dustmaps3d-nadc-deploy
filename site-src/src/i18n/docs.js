@@ -91,7 +91,7 @@ export const TOOL_DOCS = {
       ],
     },
     tools: {
-      intro: '三件常用的天文换算小工具：坐标换算、角尺度与物理尺度互算、以及文本统计。',
+      intro: '三件常用的天文换算小工具：坐标换算、角尺度与物理尺度互算、以及视星等与绝对星等换算。',
       steps: [
         [
           '坐标换算',
@@ -102,12 +102,13 @@ export const TOOL_DOCS = {
           '由距离与物理直径求角直径，或由角直径反推物理尺度。',
         ],
         [
-          '文本统计',
-          '统计字符数、词数等。',
+          '星等换算',
+          '由视星等、距离（或视差）和消光求绝对星等，或反过来求视星等、求距离；消光可手动填写，也可按位置与距离从本三维消光图查询 E(B−V)，再用 Zhang et al. (2024) 工具箱换算成所选波段的消光。',
         ],
       ],
       caveats: [
         '坐标采用 ICRS J2000、黄赤交角 ε=23.4393°；XYZ 为日心直角坐标。',
+        '星等换算：视差按 d = 1000 / ϖ 换算，未做偏差改正；求距离时不能查询消光图。',
       ],
     },
   },
@@ -200,7 +201,7 @@ export const TOOL_DOCS = {
       ],
     },
     tools: {
-      intro: 'Three handy converters: coordinate transforms, angular ↔ physical size, and text statistics.',
+      intro: 'Three handy converters: coordinate transforms, angular ↔ physical size, and apparent ↔ absolute magnitude.',
       steps: [
         [
           'Coordinate convert',
@@ -211,12 +212,13 @@ export const TOOL_DOCS = {
           'Get angular diameter from distance + physical size, or invert it.',
         ],
         [
-          'Text statistics',
-          'Count characters, words and more.',
+          'Magnitudes',
+          'Get the absolute magnitude from the apparent magnitude, distance (or parallax) and extinction, or solve for the apparent magnitude or the distance. Enter the extinction by hand, or look up E(B−V) in this 3D dust map at a position and distance and turn it into the chosen band’s extinction with the Zhang et al. (2024) toolbox.',
         ],
       ],
       caveats: [
         'Conventions: ICRS J2000, obliquity ε=23.4393°; XYZ is heliocentric.',
+        'Magnitudes: parallax is converted as d = 1000 / ϖ without bias correction; the map lookup is unavailable when solving for distance.',
       ],
     },
   },

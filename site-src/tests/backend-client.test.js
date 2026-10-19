@@ -181,12 +181,13 @@ describe('plot requests', () => {
 });
 
 describe('content', () => {
+  // 2024 drops WISE W3/W4 (beyond the 5.1 µm end of the XP curve: the toolkit returns NaN)
   it('filters match dustmaps3d-backend (toolkit.FILTER_GROUPS / FILTER_GROUPS_2023)', () => {
     const ids = (groups) => groups.flatMap((g) => g.bands.map(([id]) => id)).sort();
     expect(ids(FILTERS_2024)).toEqual([
       'Johnson.U', 'Johnson.B', 'Johnson.V', 'Johnson.R', 'GAIA3.Gbp', 'GAIA3.G', 'GAIA3.Grp',
       ...'ugriz'.split('').map((b) => `SDSS.${b}`), ...'grizy'.split('').map((b) => `PS1.${b}`),
-      '2MASS.J', '2MASS.H', '2MASS.Ks', 'WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4', '440', '550',
+      '2MASS.J', '2MASS.H', '2MASS.Ks', 'WISE.W1', 'WISE.W2', '440', '550',
     ].sort());
     expect(ids(FILTERS_2023)).toEqual([
       'BP', 'G', 'RP', 'FUV', 'NUV', ...'ugriz'.split('').map((b) => `${b}'`), ...'grizy'.split(''),

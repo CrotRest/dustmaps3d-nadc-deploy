@@ -1,14 +1,15 @@
 // Section 02: the real 3-D dust map as particles. Every particle owns one
 // direction (l, b) on the sky. Its brightness is the differential extinction
 // ΔE(B−V)/Δd [mmag/pc] at the current distance, read in the vertex shader from a
-// data atlas (40 distance shells over 0.3 → 1.8 kpc on a 640 × 320 grid, computed
-// from the dustmaps3d model by scripts/build-dustmap-model.py; the earlier atlas was
+// data atlas (40 distance shells over 0.3 → 1.8 kpc on a 1280 × 640 grid, smoothed with a
+// σ = 0.1° Gaussian, computed from the dustmaps3d model by scripts/build-dustmap-model.py
+// and loaded as one texture array; the earlier atlas was
 // decoded from the team's movie by scripts/extract-dustmap.py). The particles are laid out
 // as a Mollweide map whose equator sits on the edge-on Milky Way; a scan line
 // reveals them (and section 03's infrared line later wipes them away). While
 // the distance grows they stream outward in layers (pushing forward through
 // the dust); while it shrinks they stream back in.
-import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, DataTexture, LinearFilter, NearestFilter, NormalBlending, Points, RGBAFormat, RedFormat, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, DataArrayTexture, DataTexture, LinearFilter, NearestFilter, NormalBlending, Points, RGBAFormat, RedFormat, ShaderMaterial } from 'three';
 
 const DATA_DIR = `${import.meta.env.BASE_URL}dustmap/`;
 const ONE_WAY_S = 15; // 0.3 → 1.8 kpc
@@ -49,12 +50,11 @@ function colormapTexture() {
 }
 
 const vertex = /* glsl */ `
-uniform sampler2D uAtlas;
+uniform sampler2DArray uAtlas;
 uniform sampler2D uColormap;
 uniform vec2 uSun;         // the Sun on screen (ndc): the map's origin, where it blooms from
 uniform float uBloom;      // 0 = folded into the Sun, 1 = laid out on uRect
-uniform vec4 uAtlasInfo;   // nl, nb, cols, slice count
-uniform vec2 uAtlasSize;   // atlas width, height in texels
+uniform vec4 uAtlasInfo;   // nl, nb, unused, slice count
 uniform float uSlice;      // fractional slice index
 uniform float uSpread;     // slices between the farthest and nearest layer
 uniform float uFlow;       // accumulated layer phase (grows while pushing outward)
@@ -76,12 +76,9 @@ varying float vStretch;
 const float PI = 3.14159265;
 
 float sampleSlice(float k, vec2 lb) {
-  float col = mod(k, uAtlasInfo.z);
-  float row = floor(k / uAtlasInfo.z);
   float u = clamp(lb.x / 360.0, 0.5 / uAtlasInfo.x, 1.0 - 0.5 / uAtlasInfo.x);
   float v = clamp((90.0 - lb.y) / 180.0, 0.5 / uAtlasInfo.y, 1.0 - 0.5 / uAtlasInfo.y);
-  vec2 uv = vec2((col + u) * uAtlasInfo.x, (row + v) * uAtlasInfo.y) / uAtlasSize;
-  float r = texture2D(uAtlas, uv).r * 255.0;
+  float r = texture(uAtlas, vec3(u, v, k)).r * 255.0;
   return r < 0.5 ? -1.0 : (r - 1.0) / 254.0;
 }
 
@@ -132,12 +129,12 @@ void main() {
   float px = (ndc.x * 0.5 + 0.5);
   a *= mix(1.0, 0.25 + 0.75 * smoothstep(0.42, 0.6, px), uLeftFade);
   a *= 0.75 + 0.5 * aRnd.w;
-  // twice the particles of the first version: each one a bit smaller and fainter, so the
-  // map keeps its overall brightness and gets finer grain (0.8² × 0.78 ≈ ½)
-  vAlpha = a * uOpacity * 0.78;
+  // four times the particles of the first version: each one smaller and fainter, so the
+  // map keeps its overall brightness and gets finer grain (each doubling: 0.8² × 0.78 ≈ ½)
+  vAlpha = a * uOpacity * 0.61;
   vColor = palette(t);
 
-  float base = (1.7 + aRnd.y * 1.4 + 1.2 * smoothstep(0.55, 1.0, t)) * 0.8 * uDpr;
+  float base = (1.7 + aRnd.y * 1.4 + 1.2 * smoothstep(0.55, 1.0, t)) * 0.64 * uDpr;
   vStretch = 1.0 + 0.35 * uSpeed;
   gl_PointSize = base * vStretch;
   vec2 radial = m * uRect.zw * uPxPerNdc;
@@ -170,37 +167,44 @@ void main() {
 `;
 
 async function loadAtlas() {
-  const [meta, blob] = await Promise.all([
-    fetch(`${DATA_DIR}atlas.json`).then((r) => {
-      if (!r.ok) throw new Error(`atlas.json ${r.status}`);
-      return r.json();
+  const meta = await fetch(`${DATA_DIR}atlas.json`).then((r) => {
+    if (!r.ok) throw new Error(`atlas.json ${r.status}`);
+    return r.json();
+  });
+  const sliceSize = meta.nl * meta.nb;
+  const data = new Uint8Array(sliceSize * meta.count);
+  // each PNG holds meta.perFile slices stacked top to bottom: in memory they are already
+  // the consecutive layers of the texture array
+  await Promise.all(
+    meta.files.map(async (name, i) => {
+      const r = await fetch(`${DATA_DIR}${name}`);
+      if (!r.ok) throw new Error(`${name} ${r.status}`);
+      const bmp = await createImageBitmap(await r.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+      const canvas = document.createElement('canvas');
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close?.();
+      const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const off = i * meta.perFile * sliceSize;
+      const n = Math.min(rgba.length / 4, data.length - off);
+      for (let p = 0; p < n; p++) data[off + p] = rgba[p * 4];
+      canvas.width = canvas.height = 0; // let Safari free the canvas memory now
     }),
-    fetch(`${DATA_DIR}atlas.png`).then((r) => {
-      if (!r.ok) throw new Error(`atlas.png ${r.status}`);
-      return r.blob();
-    }),
-  ]);
-  const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-  const canvas = document.createElement('canvas');
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bmp, 0, 0);
-  bmp.close?.();
-  const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  const red = new Uint8Array(canvas.width * canvas.height);
-  for (let i = 0; i < red.length; i++) red[i] = rgba[i * 4];
-  const tex = new DataTexture(red, canvas.width, canvas.height, RedFormat);
+  );
+  const tex = new DataArrayTexture(data, meta.nl, meta.nb, meta.count);
+  tex.format = RedFormat;
   tex.magFilter = NearestFilter;
   tex.minFilter = NearestFilter;
   tex.generateMipmaps = false;
   tex.needsUpdate = true;
-  return { meta, tex, width: canvas.width, height: canvas.height };
+  return { meta, tex };
 }
 
 /** Particle layer + its distance clock. `q` scales the particle count. */
 export function createDustSky(q = 1, shared = {}) {
-  const n = Math.max(40000, Math.round(260000 * q));
+  const n = Math.max(80000, Math.round(520000 * q));
   const lb = new Float32Array(n * 2);
   const rnd = new Float32Array(n * 4);
   const pos = new Float32Array(n * 3);
@@ -227,7 +231,6 @@ export function createDustSky(q = 1, shared = {}) {
       uSun: { value: [0, 0] },
       uBloom: { value: 1 },
       uAtlasInfo: { value: [1, 1, 1, 1] },
-      uAtlasSize: { value: [1, 1] },
       uSlice: { value: 0 },
       uSpread: { value: 1 }, // narrow: layers far apart in distance would mix hues into speckle
       uFlow: { value: 0 },
@@ -287,11 +290,10 @@ export function createDustSky(q = 1, shared = {}) {
     load() {
       if (!loading) {
         loading = loadAtlas()
-          .then(({ meta: m, tex, width, height }) => {
+          .then(({ meta: m, tex }) => {
             meta = m;
             u.uAtlas.value = tex;
-            u.uAtlasInfo.value = [m.nl, m.nb, m.cols, m.count];
-            u.uAtlasSize.value = [width, height];
+            u.uAtlasInfo.value = [m.nl, m.nb, 0, m.count];
           })
           .catch(() => {
             loading = null;

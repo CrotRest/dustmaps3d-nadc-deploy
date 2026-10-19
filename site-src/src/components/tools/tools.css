@@ -900,15 +900,31 @@
   margin-bottom: 18px;
 }
 
+.mag__row3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.mag__ext-label {
+  margin-top: 14px;
+}
+
+.mag__hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.mag__warn {
+  margin-top: 10px;
+}
+
 .unit-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 11px;
-}
-
-.text-tool__input {
-  min-height: 170px;
-  font-size: 13.5px;
 }
 
 /* ---------- responsive ---------- */
