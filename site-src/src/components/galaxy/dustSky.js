@@ -5,11 +5,12 @@
 // σ = 0.1° Gaussian, computed from the dustmaps3d model by scripts/build-dustmap-model.py
 // and loaded as one texture array; the earlier atlas was
 // decoded from the team's movie by scripts/extract-dustmap.py). The particles are laid out
-// as a Mollweide map whose equator sits on the edge-on Milky Way; a scan line
-// reveals them (and section 03's infrared line later wipes them away). While
+// as a Mollweide map whose equator sits on the edge-on Milky Way and bloom out of the
+// Sun; once laid out they hand over to a per-pixel image layer of the same atlas, which
+// keeps the fine structure the overlapping particles blurred away. While
 // the distance grows they stream outward in layers (pushing forward through
 // the dust); while it shrinks they stream back in.
-import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, DataArrayTexture, DataTexture, LinearFilter, NearestFilter, NormalBlending, Points, RGBAFormat, RedFormat, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, DataArrayTexture, DataTexture, LinearFilter, Mesh, NearestFilter, NormalBlending, PlaneGeometry, Points, RGBAFormat, RedFormat, ShaderMaterial } from 'three';
 
 const DATA_DIR = `${import.meta.env.BASE_URL}dustmap/`;
 const ONE_WAY_S = 15; // 0.3 → 1.8 kpc
@@ -17,14 +18,15 @@ const HOLD_S = 1; // pause at either end before turning back
 const STATIC_KPC = 1; // reduced motion: the slice nearest this distance
 
 // The colour bar of the team's figures (ΔE(B−V) 1e-4 … 2 mmag/pc, log), sampled at 33
-// even steps from dust.mp4, so the map shows the same fine colour steps. Both ends of the
-// original run into near-black, which would vanish on the dark page: the low end is lifted
-// to a visible deep blue, and the high end runs on to bright magenta-pink so the densest
-// dust stays the most striking. Everything in between is the original.
+// even steps from dust.mp4, so the map shows the same fine colour steps. The low end (the
+// original's blue → teal → green, up to ~3e-3 mmag/pc) is replaced by a ramp from black
+// into the original's yellow, so thin dust sinks into the dark page; the high end runs on
+// to bright magenta-pink so the densest dust stays the most striking. From the yellow on
+// it is the original.
 const COLORMAP = [
-  [70, 62, 170], [72, 74, 178], [66, 86, 180], [56, 98, 176], [44, 108, 170], [36, 116, 162],
-  [36, 122, 152], [44, 128, 142], [59, 134, 134], [75, 137, 123], [93, 150, 124], [112, 162, 118],
-  [133, 176, 111], [157, 188, 100], [183, 200, 90], [214, 210, 70], [246, 219, 39], [246, 197, 23],
+  [0, 0, 0], [3, 3, 1], [9, 8, 3], [16, 16, 5], [26, 25, 8], [37, 36, 12],
+  [49, 48, 16], [63, 62, 21], [78, 77, 26], [95, 93, 31], [112, 110, 37], [130, 128, 43],
+  [150, 147, 49], [170, 167, 56], [192, 188, 63], [214, 210, 70], [246, 219, 39], [246, 197, 23],
   [246, 175, 12], [240, 151, 10], [235, 130, 18], [226, 110, 28], [216, 91, 35], [203, 74, 47],
   [190, 54, 56], [175, 37, 63], [166, 22, 80], [170, 12, 100], [186, 20, 124], [206, 38, 150],
   [226, 68, 176], [242, 110, 204], [252, 160, 228],
@@ -60,6 +62,7 @@ uniform float uSpread;     // slices between the farthest and nearest layer
 uniform float uFlow;       // accumulated layer phase (grows while pushing outward)
 uniform float uSpeed;      // 0..1, how fast the distance is changing
 uniform float uOpacity;
+uniform float uHandoff;    // 0 = particles, 1 = handed over to the image layer
 uniform vec4 uRect;        // Mollweide centre (ndc) and semi-axes (ndc)
 uniform float uDpr;
 uniform float uLeftFade;
@@ -131,7 +134,7 @@ void main() {
   a *= 0.75 + 0.5 * aRnd.w;
   // four times the particles of the first version: each one smaller and fainter, so the
   // map keeps its overall brightness and gets finer grain (each doubling: 0.8² × 0.78 ≈ ½)
-  vAlpha = a * uOpacity * 0.61;
+  vAlpha = a * uOpacity * 0.61 * (1.0 - uHandoff);
   vColor = palette(t);
 
   float base = (1.7 + aRnd.y * 1.4 + 1.2 * smoothstep(0.55, 1.0, t)) * 0.64 * uDpr;
@@ -163,6 +166,104 @@ void main() {
   float shown = smoothstep(uMapX.x - 0.002, uMapX.x + 0.002, x) * (1.0 - smoothstep(uMapX.y - 0.002, uMapX.y + 0.002, x));
   if (shown <= 0.0) discard;
   gl_FragColor = vec4(vColor, vAlpha * g * shown);
+}
+`;
+
+// Once the map has bloomed, the particles hand over to this layer: every screen pixel
+// inside the ellipse is inverse-Mollweide'd to (l, b) and the atlas is read there
+// (bilinear between grid points, linear between the two nearest shells), so the map shows
+// the data at its full resolution instead of as overlapping soft dots.
+const imageVertex = /* glsl */ `
+void main() {
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
+const imageFragment = /* glsl */ `
+uniform sampler2DArray uAtlas;
+uniform sampler2D uColormap;
+uniform vec4 uAtlasInfo;
+uniform float uSlice;
+uniform float uOpacity;
+uniform vec4 uRect;
+uniform float uLeftFade;
+uniform vec2 uMapX;
+uniform vec2 uRes;
+
+const float PI = 3.14159265;
+
+// one grid value (-1 = no data); column wraps in l, row clamps at the poles
+float texel(int x, int y, int k) {
+  int nl = int(uAtlasInfo.x);
+  int nb = int(uAtlasInfo.y);
+  x = x < 0 ? x + nl : (x >= nl ? x - nl : x);
+  y = clamp(y, 0, nb - 1);
+  float r = texelFetch(uAtlas, ivec3(x, y, k), 0).r * 255.0;
+  return r < 0.5 ? -1.0 : (r - 1.0) / 254.0;
+}
+
+// bilinear over the grid points that have data: x = value, y = weight with data
+vec2 sampleSlice(int k, vec2 lb) {
+  vec2 p = vec2(lb.x / 360.0 * uAtlasInfo.x, (90.0 - lb.y) / 180.0 * uAtlasInfo.y) - 0.5;
+  vec2 i0 = floor(p);
+  vec2 f = p - i0;
+  int x0 = int(i0.x);
+  int y0 = int(i0.y);
+  float v[4];
+  v[0] = texel(x0, y0, k);
+  v[1] = texel(x0 + 1, y0, k);
+  v[2] = texel(x0, y0 + 1, k);
+  v[3] = texel(x0 + 1, y0 + 1, k);
+  float w[4];
+  w[0] = (1.0 - f.x) * (1.0 - f.y);
+  w[1] = f.x * (1.0 - f.y);
+  w[2] = (1.0 - f.x) * f.y;
+  w[3] = f.x * f.y;
+  float sum = 0.0;
+  float wsum = 0.0;
+  for (int i = 0; i < 4; i++) {
+    if (v[i] >= 0.0) { sum += v[i] * w[i]; wsum += w[i]; }
+  }
+  return wsum > 0.0 ? vec2(sum / wsum, wsum) : vec2(0.0);
+}
+
+void main() {
+  vec2 ndc = gl_FragCoord.xy / uRes * 2.0 - 1.0;
+  vec2 m = (ndc - uRect.xy) / uRect.zw;
+  float r = length(m);
+  float aa = fwidth(r) * 1.5;
+  float inside = 1.0 - smoothstep(1.0 - aa, 1.0, r);
+  if (inside <= 0.0) discard;
+
+  // inverse Mollweide (l grows to the left, like the particles)
+  float th = asin(clamp(m.y, -1.0, 1.0));
+  float b = asin(clamp((2.0 * th + sin(2.0 * th)) / PI, -1.0, 1.0));
+  float lam = -PI * m.x / max(cos(th), 1e-4);
+  if (abs(lam) > PI) discard;
+  float l = lam < 0.0 ? lam + 2.0 * PI : lam;
+  vec2 lb = vec2(degrees(l), degrees(b));
+
+  float n = uAtlasInfo.w;
+  float s = clamp(uSlice, 0.0, n - 1.0);
+  int k0 = int(floor(s));
+  int k1 = min(k0 + 1, int(n) - 1);
+  float f = s - float(k0);
+  vec2 a0 = sampleSlice(k0, lb);
+  vec2 a1 = sampleSlice(k1, lb);
+  float w0 = a0.y * (1.0 - f);
+  float w1 = a1.y * f;
+  float valid = w0 + w1;
+  if (valid <= 0.0) discard;
+  float t = (a0.x * w0 + a1.x * w1) / valid;
+
+  vec3 col = texture2D(uColormap, vec2(0.5 / 256.0 + t * 255.0 / 256.0, 0.5)).rgb;
+  float a = mix(0.82, 0.97, smoothstep(0.1, 0.9, t)) * clamp(valid * 2.0, 0.0, 1.0) * inside;
+  float px = gl_FragCoord.x / uRes.x;
+  a *= mix(1.0, 0.25 + 0.75 * smoothstep(0.42, 0.6, px), uLeftFade);
+  float shown = smoothstep(uMapX.x - 0.002, uMapX.x + 0.002, px) * (1.0 - smoothstep(uMapX.y - 0.002, uMapX.y + 0.002, px));
+  a *= shown * uOpacity;
+  if (a < 0.003) discard;
+  gl_FragColor = vec4(col, a);
 }
 `;
 
@@ -236,6 +337,7 @@ export function createDustSky(q = 1, shared = {}) {
       uFlow: { value: 0 },
       uSpeed: { value: 0 },
       uOpacity: { value: 0 },
+      uHandoff: { value: 0 },
       uRect: { value: [0.3, 0, 0.6, 0.5] },
       uDpr: { value: 1 },
       uMapX: shared.uMapX || { value: [1, 1] },
@@ -255,6 +357,33 @@ export function createDustSky(q = 1, shared = {}) {
   points.renderOrder = 20;
   points.visible = false;
 
+  // the image layer reads the same atlas, slice, ellipse and masks as the particles
+  const pu = material.uniforms;
+  const imageGeom = new PlaneGeometry(2, 2);
+  const imageMat = new ShaderMaterial({
+    uniforms: {
+      uAtlas: pu.uAtlas,
+      uColormap: pu.uColormap,
+      uAtlasInfo: pu.uAtlasInfo,
+      uSlice: pu.uSlice,
+      uRect: pu.uRect,
+      uLeftFade: pu.uLeftFade,
+      uMapX: pu.uMapX,
+      uRes: pu.uRes,
+      uOpacity: { value: 0 },
+    },
+    vertexShader: imageVertex,
+    fragmentShader: imageFragment,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    blending: NormalBlending,
+  });
+  const image = new Mesh(imageGeom, imageMat);
+  image.frustumCulled = false;
+  image.renderOrder = 19;
+  image.visible = false;
+
   let meta = null;
   let loading = null;
   // dev only: ?dclock=<seconds> starts the distance sweep elsewhere (screenshots)
@@ -270,6 +399,7 @@ export function createDustSky(q = 1, shared = {}) {
 
   return {
     points,
+    image,
     get ready() {
       return Boolean(meta);
     },
@@ -331,6 +461,8 @@ export function createDustSky(q = 1, shared = {}) {
     dispose() {
       geom.dispose();
       material.dispose();
+      imageGeom.dispose();
+      imageMat.dispose();
       u.uAtlas.value?.dispose();
       u.uColormap.value.dispose();
     },

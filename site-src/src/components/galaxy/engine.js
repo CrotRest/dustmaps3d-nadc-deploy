@@ -188,6 +188,7 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
   // section 02: the real dust map as particles (loaded on approach)
   const dust = createDustSky(tier.q, shared);
   scene.add(dust.points);
+  scene.add(dust.image);
 
   const camera = new PerspectiveCamera(40, 1, 0.01, 3000);
   const hud = createHud(hudCanvas);
@@ -414,6 +415,12 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
     const du = dust.points.material.uniforms;
     dust.points.visible = dust.ready && fx.sky > 0.001 && fx.bloom > 0.001 && !DEV_NODUST;
     du.uOpacity.value = fx.sky;
+    // once the map has bloomed out of the Sun, the sharp image layer takes over from the particles
+    const handoff = DEV_NODUST ? 0 : Math.min(1, Math.max(0, (fx.bloom - 0.85) / 0.15));
+    du.uHandoff.value = handoff * handoff * (3 - 2 * handoff);
+    dust.image.visible = dust.ready && fx.sky > 0.001 && handoff > 0 && !DEV_NODUST;
+    dust.image.material.uniforms.uOpacity.value = fx.sky * du.uHandoff.value;
+    if (du.uHandoff.value > 0.999) dust.points.visible = false;
     du.uRect.value = [(mr.cx / W) * 2 - 1, 1 - (mr.cy / H) * 2, (mr.a / W) * 2, (mr.b / H) * 2];
     du.uSun.value = [(origin.x / W) * 2 - 1, 1 - (origin.y / H) * 2];
     du.uBloom.value = fx.bloom;
