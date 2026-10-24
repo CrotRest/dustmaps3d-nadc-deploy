@@ -176,9 +176,10 @@ export const STRINGS = {
       },
       {
         title: '图集',
-        desc: '全天累积红化图、分距离层图、银盘尘埃切片与分子云分布，共 12 张。',
+        desc: '全天累积红化图、分距离层图、银盘尘埃切片与分子云分布，共 12 张；另有一段穿越尘埃的动画视频。',
         items: [
           { name: '图集 · 12 张图与图注', fmt: 'WEB', open: 'gallery' },
+          { name: '尘埃穿越动画 · 1080p 60 秒', fmt: 'MP4', size: '≈97 MB', download: 'media/dust-flythrough.mp4' },
           { name: 'NADC 资源下载页', fmt: 'WEB', href: NADC_RESOURCES_URL },
         ],
       },
@@ -443,9 +444,10 @@ export const STRINGS = {
       },
       {
         title: 'Figures',
-        desc: 'All-sky cumulative reddening, distance shells, Galactic-disk dust slices and molecular clouds — 12 figures.',
+        desc: 'All-sky cumulative reddening, distance shells, Galactic-disk dust slices and molecular clouds — 12 figures — plus a fly-through video of the dust.',
         items: [
           { name: 'Gallery · 12 figures with captions', fmt: 'WEB', open: 'gallery' },
+          { name: 'Dust fly-through video · 1080p, 60 s', fmt: 'MP4', size: '≈97 MB', download: 'media/dust-flythrough.mp4' },
           { name: 'NADC resources page', fmt: 'WEB', href: NADC_RESOURCES_URL },
         ],
       },

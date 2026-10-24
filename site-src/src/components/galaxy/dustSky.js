@@ -1,6 +1,6 @@
 // Section 02: the real 3-D dust map. The differential extinction ΔE(B−V)/Δd [mmag/pc]
 // comes from a data atlas (40 distance shells over 0.3 → 1.8 kpc on a 1280 × 640 grid,
-// smoothed with a σ = 0.1° Gaussian, computed from the dustmaps3d model by
+// smoothed with a σ = 0.2° Gaussian, computed from the dustmaps3d model by
 // scripts/build-dustmap-model.py and loaded as one texture array). The map is drawn per
 // pixel as a Mollweide ellipse whose equator sits on the edge-on Milky Way: every screen
 // pixel inside it is inverse-Mollweide'd to (l, b) and the atlas is read there (bilinear
@@ -11,7 +11,7 @@
 import { ClampToEdgeWrapping, DataArrayTexture, DataTexture, LinearFilter, Mesh, NearestFilter, NormalBlending, OrthographicCamera, PlaneGeometry, RGBAFormat, RedFormat, Scene, ShaderMaterial, Vector2, WebGLRenderer } from 'three';
 
 const DATA_DIR = `${import.meta.env.BASE_URL}dustmap/`;
-const ONE_WAY_S = 15; // 0.3 → 1.8 kpc
+const ONE_WAY_S = 8; // 0.3 → 1.8 kpc
 const HOLD_S = 1; // pause at either end before turning back
 const STATIC_KPC = 1; // reduced motion: the slice nearest this distance
 const MAX_DPR = 2;

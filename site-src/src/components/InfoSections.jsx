@@ -115,7 +115,7 @@ function CitedBy() {
   );
 }
 
-/** One resource row: an external link (`href`) or a button opening a reading modal (`open`). */
+/** One resource row: an external link (`href`), a file of the site to save (`download`) or a button opening a reading modal (`open`). */
 function ResourceItem({ item }) {
   const { openModal } = useTools();
   const body = (
@@ -126,7 +126,7 @@ function ResourceItem({ item }) {
       </span>
       <span className="res-item__meta">
         {item.size ? `${item.size} · ` : ''}
-        {item.open ? '→' : '↗'}
+        {item.open ? '→' : item.download ? '↓' : '↗'}
       </span>
     </>
   );
@@ -136,6 +136,10 @@ function ResourceItem({ item }) {
         <button type="button" className="res-item res-item--link" onClick={() => openModal(item.open)}>
           {body}
         </button>
+      ) : item.download ? (
+        <a className="res-item res-item--link" href={`${import.meta.env.BASE_URL}${item.download}`} download>
+          {body}
+        </a>
       ) : (
         <a className="res-item res-item--link" href={item.href} target="_blank" rel="noopener noreferrer">
           {body}

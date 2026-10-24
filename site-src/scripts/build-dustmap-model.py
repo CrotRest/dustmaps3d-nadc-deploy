@@ -27,7 +27,7 @@ COUNT = 40                              # shells over D_MIN … D_MAX
 D_MIN, D_MAX = 0.3, 1.8                 # kpc
 PER_FILE = 10                           # slices per PNG: 1280 × 6400 px
 VMIN, VMAX = -4.0, float(np.log10(2.0)) # same colour scale as the earlier movie-based atlas
-SMOOTH_DEG = 0.1                        # Gaussian σ on the fine l, b grid, in degrees
+SMOOTH_DEG = 0.2                        # Gaussian σ on the fine l, b grid, in degrees
 
 FL, FB = NL * FINE, NB * FINE
 l = (np.arange(FL) + 0.5) * 360 / FL

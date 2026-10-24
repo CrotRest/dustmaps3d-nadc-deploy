@@ -2,6 +2,7 @@
 // by running the design's own logic (scripts/extract-design-golden.mjs). The design's
 // simulated model now only drives the galaxy HUD's demo numbers; the tools call the
 // backend (tests/backend-client.test.js).
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import golden from './fixtures/design-golden.json';
 import astropy from './fixtures/astropy-coords.json';
@@ -142,14 +143,15 @@ describe('copy & content', () => {
       expect(Object.keys(STRINGS[lang]).sort()).toEqual(Object.keys(STRINGS.zh).sort());
     }
   });
-  it('resource rows are real links or open a reading modal', () => {
+  it('resource rows are real links, site files or open a reading modal', () => {
     const modals = new Set(['reddening', 'docs', 'gallery']);
     for (const lang of ['zh', 'en']) {
       expect(STRINGS[lang].resources).toHaveLength(3);
       for (const r of STRINGS[lang].resources) {
         for (const item of r.items) {
-          expect(Boolean(item.href) !== Boolean(item.open), `${lang} ${item.name}`).toBe(true);
+          expect([item.href, item.open, item.download].filter(Boolean), `${lang} ${item.name}`).toHaveLength(1);
           if (item.href) expect(item.href).toMatch(/^https:\/\//);
+          else if (item.download) expect(existsSync(new URL(`../public/${item.download}`, import.meta.url))).toBe(true);
           else expect(modals.has(item.open)).toBe(true);
         }
       }
