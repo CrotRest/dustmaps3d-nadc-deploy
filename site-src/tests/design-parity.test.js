@@ -127,7 +127,7 @@ describe('angular size utility', () => {
 // "Python · Skills"; the hero line no longer explains the input), and copy that the
 // real backend made untrue (2026-10-08: tools follow dustmaps3d-backend)
 const REVISED = new Set([
-  'navPkg', 'pkgTitle', 'sec1Sub', 'queryTitle', 'plotTitle',
+  'navPkg', 'plotProjOrt', 'pkgTitle', 'sec1Sub', 'queryTitle', 'plotTitle',
   'batchSub', 'plotSub', 'bcpSub', 'bcpPoints', 'pkgSub', 'resTitle', 'resNote',
   'batchInputLabel', 'batchNone', 'footer', 'navPlot',
   'contacts', // 2026-10-14: user added each contributor's role

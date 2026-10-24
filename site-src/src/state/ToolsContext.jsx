@@ -31,14 +31,18 @@ const initialState = {
     },
     sin: {
       frame: 'galactic',
-      lc: '0', bc: '0', fov: '30', dmin: '0.5', dmax: '1', mark: true, markColor: 'black',
+      lc: '0', bc: '0', fov: '30', dmin: '0.5', dmax: '1',
       ...plotStyle({ vmin: '0.01', vmax: '1', scale: 'log' }),
+    },
+    ort: {
+      plane: 'xy', r1min: '-2', r1max: '2', r2min: '-2', r2max: '2', fmin: '-0.05', fmax: '0.05',
+      res: '10', smooth: '5', agg: 'mean', vmin: '0.01', vmax: '5', scale: 'log', cmap: 'Spectral_r',
     },
     dpr: {
       angle: '60', offset: '0.3', halfWidth: '0.1', smin: '-3', smax: '3', zmin: '-0.5', zmax: '0.5',
       origin: true, bubbles: true, vmin: '0.05', vmax: '1', cmap: 'Spectral_r',
     },
-    results: { car: null, sin: null, dpr: null }, // { url, filename, caption }
+    results: { car: null, sin: null, ort: null, dpr: null }, // { url, filename, caption }
     busy: null, // projection being drawn
     error: null,
   },

@@ -40,7 +40,7 @@ Nginx（已有的 NADC server 块里新增 6 个 location）
 
 网站里所有请求都是**相对于页面的地址**（`./api/v2/...`、`./files/...`），所以无论放在哪个路径下，只要 Nginx 在同一路径下转发 `api/` 和 `files/` 就能工作，不需要跨域配置。
 
-网站用到的后端接口：`POST api/v2/dust/query`、`POST api/v2/dust/batch`、`GET api/v2/dust/templates`、`POST api/v2/plots/car`、`POST api/v2/plots/sin`、`POST api/v2/plots/dpr`、`POST api/v2/bubbles/analyze`、`POST api/v2/bubbles/schematic`、`POST api/v2/extinction/coefficient`。
+网站用到的后端接口：`POST api/v2/dust/query`、`POST api/v2/dust/batch`、`GET api/v2/dust/templates`、`POST api/v2/plots/car`、`POST api/v2/plots/sin`、`POST api/v2/plots/ort`、`POST api/v2/plots/dpr`、`POST api/v2/bubbles/analyze`、`POST api/v2/bubbles/schematic`、`POST api/v2/extinction/coefficient`。
 
 ## 2. 包内文件
 
@@ -65,7 +65,7 @@ dustmaps3d-nadc-deploy/
 │   ├── env.production             后端配置，复制为 backend/.env
 │   ├── cleanup-results.sh         每小时删除 24 小时前生成的图片
 │   ├── assemble_grid3d.sh         拼接三维网格分片并校验 SHA-256
-│   └── smoke_test.sh              部署后端到端验收（12 项检查）
+│   └── smoke_test.sh              部署后端到端验收（13 项检查）
 └── site-src/                      网站源码（只在以后要修改网站时才用；部署不需要 Node）
 ```
 
@@ -333,7 +333,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 - **σ 补丁（已应用）**：原版后端对任何距离都返回整条视线的总 `sigma`。pip 包 dustmaps3d 按距离分段取值：d < 1 kpc 取 min(sigma, sigma_0_2)；1–2 kpc 再加入 sigma_1_4；2–4 kpc 取 min(sigma_1_4, sigma_2_max)；≥ 4 kpc 取 sigma_2_max；后两段缺值时退回 sigma。补丁让后端与 pip 包一致，只改 `dustmaps_backend/science.py` 一处，并新增一条单元测试。要恢复原版行为：在 `/opt/dustmaps3d/backend` 里执行 `git apply -R /path/to/0001-distance-dependent-sigma.patch`（目录不是 git 仓库也能用），然后重启服务。
 - **对照结果**（本地 1200 条随机视线）：E(B−V)、σ、最大可信距离与 pip 包一致；尘埃密度相对差 ≤ 4×10⁻⁶，这是 float32 模型数据本身的精度。恰好落在 HEALPix 像素边界上的整数坐标（如 l=90°, b=0°）可能分到相邻像素：后端用 healpy，pip 包用 astropy_healpix；随机坐标不会碰到。复查方法：`.venv/bin/python /opt/dustmaps3d/tools/parity_test.py --base-url http://127.0.0.1:58123`（需要先让 pip 包找到数据：`mkdir -p ~dustmaps/.local/share/dustmaps3d && ln -s /opt/dustmaps3d/data/data_v3.fits ~dustmaps/.local/share/dustmaps3d/`，再以 dustmaps 用户运行）。
 - **红化系数**：两套工具箱的结果与 NADC 线上 `/data/dustmaps/toolkit` 逐位一致。
-- 网站用笛卡尔、正射和斜剖面三种投影；正交切片（`/plots/ort`）和 3D viewer 没有配置，网站不会调用。斜剖面的颜色缩放固定为 log（后端只接受 log）。
+- 网站用笛卡尔、正射、正交切片（`/plots/ort`，后端自带，不需要额外数据）和斜剖面四种投影；3D viewer 没有配置，网站不会调用。斜剖面的颜色缩放固定为 log（后端只接受 log）；正交切片只有 linear / log。
 - 02 全天图和 03 尘泡绘画的是 d_min–d_max 区间内的**平均尘埃密度**（mag/kpc），不是累积 E(B−V)。
 
 ## 9. 部署完成后
@@ -342,7 +342,7 @@ pnpm build       # 产物在 dist/，整体替换服务器上的 /opt/dustmaps3d
 
 ## 版本
 
-- 网站：2026-10-24 构建，源码见 `site-src/`（本次更新：02 图集改为 σ = 0.2° 高斯平滑（`dustmap/atlas-*.png` 已替换），距离扫描单程 8 秒；08 图集加入「尘埃穿越动画」视频下载（`media/dust-flythrough.mp4`，1080p 60 秒，约 97 MB）；02 全天图去掉粒子，全程逐像素绘制，单独一张画布按屏幕像素密度（最高 2 倍）渲染，手机与电脑同样清晰，并与 HUD 网格一起从太阳展开，距离扫描时地图位置固定不再下坠；色标低值段（原蓝—青—绿）改为由黑色渐变到黄色。后端、配置与数据不变）。2026-10-19：02 动画改用 σ = 0.1° 高斯平滑、1280×640 的新图集，拆成 `dustmap/atlas-0…3.png` 四张，共约 24 MB；05 天文小工具箱去掉字符统计、新增星等换算（可从本消光图查消光）；04 红化工具箱引用改为论文与 DOI 链接，2024 工具箱隐去模型范围外的 WISE W3/W4；文案与联系人更新。后端与配置不变）。2026-10-16：02 加第三种投影「斜剖面投影」，可叠加超级气泡截面；后端需要 4.4b 的两份数据。2026-10-14：联系区加成员贡献；07 加 Citations 引用论文列表（ADS 34 篇）；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
+- 网站：2026-10-24 构建，源码见 `site-src/`（本次更新：02 新增第四种投影「正交切片」（`/plots/ort`，银道直角坐标 XY / XZ / YZ 切面）；正射投影去掉「添加标记圈」选项；02 图集改为 σ = 0.2° 高斯平滑（`dustmap/atlas-*.png` 已替换），距离扫描单程 8 秒；08 图集加入「尘埃穿越动画」视频下载（`media/dust-flythrough.mp4`，1080p 60 秒，约 97 MB）；02 全天图去掉粒子，全程逐像素绘制，单独一张画布按屏幕像素密度（最高 2 倍）渲染，手机与电脑同样清晰，并与 HUD 网格一起从太阳展开，距离扫描时地图位置固定不再下坠；色标低值段（原蓝—青—绿）改为由黑色渐变到黄色。后端、配置与数据不变）。2026-10-19：02 动画改用 σ = 0.1° 高斯平滑、1280×640 的新图集，拆成 `dustmap/atlas-0…3.png` 四张，共约 24 MB；05 天文小工具箱去掉字符统计、新增星等换算（可从本消光图查消光）；04 红化工具箱引用改为论文与 DOI 链接，2024 工具箱隐去模型范围外的 WISE W3/W4；文案与联系人更新。后端与配置不变）。2026-10-16：02 加第三种投影「斜剖面投影」，可叠加超级气泡截面；后端需要 4.4b 的两份数据。2026-10-14：联系区加成员贡献；07 加 Citations 引用论文列表（ADS 34 篇）；01→02 全天图从太阳处展开；02 改为 0.3–1.8 kpc、论文图色带。只更新网站时，把 `site/` 整体替换到 `/opt/dustmaps3d/site/` 即可，后端与配置不变
 - 后端：SunnyHina/dustmaps3d-backend @ `564cfb8`，加 `0001-distance-dependent-sigma.patch`
 - 数据：dustmaps3d `data_v3.fits`（HEALPix Nside = 1024，RING 排序，12,582,912 行）；斜剖面网格 `grid3d.parquet`（72,000,000 行，SHA-256 `6e2fadef…`）；超级气泡参数表 30 行
-- 本地验收（macOS，Python 3.11.15，Java 11，STILTS 3.5-6）：后端测试 10/10，前端测试 104/104，`smoke_test.sh --backend-only` 10/10 通过（2026-10-16，含斜剖面）；上一次在模拟的 `/data/dustmaps3d/` 子路径下 11/11 通过。Nginx 配置文件未在真实 Nginx 上做过 `nginx -t`，请在 4.10 步执行。
+- 本地验收（macOS，Python 3.11.15，Java 11，STILTS 3.5-6）：后端测试 10/10，前端测试 98/98，`smoke_test.sh --backend-only` 11/11 通过（2026-10-24，含正交切片与斜剖面）；上一次在模拟的 `/data/dustmaps3d/` 子路径下 11/11 通过。Nginx 配置文件未在真实 Nginx 上做过 `nginx -t`，请在 4.10 步执行。

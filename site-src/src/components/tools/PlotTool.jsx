@@ -2,7 +2,7 @@ import { useLang } from '../../i18n/LangContext.jsx';
 import { toUiError, useTools } from '../../state/ToolsContext.jsx';
 import { plotMap } from '../../data/api.js';
 import { MARK_COLORS, PLOT_COLORMAPS } from '../../data/content.js';
-import { carRequest, dprRequest, sinRequest } from '../../lib/plotParams.js';
+import { ORT_PLANES, carRequest, dprRequest, ortRequest, sinRequest } from '../../lib/plotParams.js';
 import Segmented from '../ui/Segmented.jsx';
 import { errorText } from './errorText.js';
 import './tools.css';
@@ -63,7 +63,7 @@ export function StyleFields({ f, set, setValue, idPrefix }) {
   );
 }
 
-/** "Add marker" checkbox + colour, as on the NADC orthographic and bubble forms. */
+/** "Add marker" checkbox + colour, as on the NADC bubble form. */
 export function MarkFields({ f, setValue, label, idPrefix }) {
   const { t } = useLang();
   return (
@@ -135,6 +135,70 @@ function DprFields({ f, set, setValue }) {
   );
 }
 
+/** Orthogonal-slice geometry, as the backend's OrtPlot schema takes it. */
+function OrtFields({ f, set, setValue }) {
+  const { t } = useLang();
+  const [a1, a2, fixed] = ORT_PLANES[f.plane].map((a) => a.toUpperCase());
+  return (
+    <>
+      <div className="plot-field">
+        <span className="plot-field__label">{t.ortPlane}</span>
+        <Segmented
+          label={t.ortPlane}
+          value={f.plane}
+          onChange={(plane) => setValue({ plane })}
+          options={Object.keys(ORT_PLANES).map((v) => ({ value: v, label: v.toUpperCase() }))}
+        />
+      </div>
+      <RangeField label={t.ortAxisRange.replace('{a}', a1)} to={t.plotTo} step="0.1" min={f.r1min} max={f.r1max} onMin={set('r1min')} onMax={set('r1max')} />
+      <RangeField label={t.ortAxisRange.replace('{a}', a2)} to={t.plotTo} step="0.1" min={f.r2min} max={f.r2max} onMin={set('r2min')} onMax={set('r2max')} />
+      <RangeField label={t.ortThick.replace('{a}', fixed)} to={t.plotTo} step="0.01" min={f.fmin} max={f.fmax} onMin={set('fmin')} onMax={set('fmax')} />
+    </>
+  );
+}
+
+/** Sampling, smoothing and colours of the orthogonal slice; the backend takes linear or log only (no hist). */
+function OrtStyleFields({ f, set, setValue }) {
+  const { t } = useLang();
+  return (
+    <>
+      <div className="field-pair field-pair--tight">
+        <NumberField id="ort-res" label={t.ortRes} value={f.res} onChange={set('res')} />
+        <NumberField id="ort-smooth" label={t.ortSmooth} value={f.smooth} onChange={set('smooth')} />
+      </div>
+      <div className="plot-field">
+        <span className="plot-field__label">{t.ortAgg}</span>
+        <Segmented
+          label={t.ortAgg}
+          value={f.agg}
+          onChange={(agg) => setValue({ agg })}
+          options={[
+            { value: 'mean', label: t.ortMean },
+            { value: 'median', label: t.ortMedian },
+          ]}
+        />
+      </div>
+      <RangeField label={t.plotColorRange} to={t.plotTo} step="0.01" min={f.vmin} max={f.vmax} onMin={set('vmin')} onMax={set('vmax')} />
+      <div className="plot-field">
+        <span className="plot-field__label">{t.plotScaleLabel}</span>
+        <Segmented label={t.plotScaleLabel} value={f.scale} onChange={(scale) => setValue({ scale })} options={['linear', 'log'].map((v) => ({ value: v, label: v }))} />
+      </div>
+      <div className="plot-field">
+        <label className="plot-field__label" htmlFor="ort-cmap">
+          {t.plotCmapLabel}
+        </label>
+        <select id="ort-cmap" className="plot-select" value={f.cmap} onChange={set('cmap')}>
+          {PLOT_COLORMAPS.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
 /** The slice is always drawn on a log scale, so only the range and colormap are free. */
 function DprStyleFields({ f, set }) {
   const { t } = useLang();
@@ -175,7 +239,7 @@ export default function PlotTool() {
   const generate = async () => {
     let body;
     try {
-      body = proj === 'car' ? carRequest(f) : proj === 'sin' ? sinRequest(f) : dprRequest(f);
+      body = { car: carRequest, sin: sinRequest, ort: ortRequest, dpr: dprRequest }[proj](f);
     } catch (e) {
       update('plot', { error: toUiError(e) });
       return;
@@ -186,7 +250,13 @@ export default function PlotTool() {
       const caption =
         proj === 'dpr'
           ? t.dprCaption.replace('{a}', body.angle_degrees).replace('{b}', body.offset)
-          : t.plotCaption.replace('{a}', body.d_min).replace('{b}', body.d_max);
+          : proj === 'ort'
+            ? t.ortCaption
+                .replace('{p}', `${body.axis1}${body.axis2}`.toUpperCase())
+                .replace('{a}', body.fixed_axis.toUpperCase())
+                .replace('{b}', body.fixed_range_min)
+                .replace('{c}', body.fixed_range_max)
+            : t.plotCaption.replace('{a}', body.d_min).replace('{b}', body.d_max);
       update('plot', (s) => ({ busy: null, results: { ...s.results, [proj]: { ...r, caption } } }));
     } catch (e) {
       update('plot', { busy: null, error: toUiError(e) });
@@ -203,6 +273,8 @@ export default function PlotTool() {
             <div className="plot-group">{t.plotRegionH}</div>
             {proj === 'dpr' ? (
               <DprFields f={f} set={set} setValue={setValue} />
+            ) : proj === 'ort' ? (
+              <OrtFields f={f} set={set} setValue={setValue} />
             ) : (
               <>
                 <div className="plot-field">
@@ -232,7 +304,6 @@ export default function PlotTool() {
                   </>
                 )}
                 <RangeField label={t.plotDistRange} to={t.plotTo} step="0.1" min={f.dmin} max={f.dmax} onMin={set('dmin')} onMax={set('dmax')} />
-                {proj === 'sin' && <MarkFields f={f} setValue={setValue} label={t.plotMark} idPrefix="plot" />}
               </>
             )}
           </div>
@@ -241,6 +312,8 @@ export default function PlotTool() {
             <div className="plot-group">{t.plotParamsH}</div>
             {proj === 'dpr' ? (
               <DprStyleFields f={f} set={set} />
+            ) : proj === 'ort' ? (
+              <OrtStyleFields f={f} set={set} setValue={setValue} />
             ) : (
               <StyleFields f={f} set={set} setValue={setValue} idPrefix="plot" />
             )}
@@ -258,6 +331,7 @@ export default function PlotTool() {
               options={[
                 { value: 'car', label: t.plotProjCar },
                 { value: 'sin', label: t.plotProjSin },
+                { value: 'ort', label: t.plotProjOrt },
                 { value: 'dpr', label: t.plotProjDpr },
               ]}
             />
@@ -269,7 +343,7 @@ export default function PlotTool() {
             <div className="await-box plot-tool__await">{p.busy === proj ? t.plotRendering : t.plotEmpty}</div>
           )}
           <div className="plot-tool__footer">
-            <span className="plot-tool__hint">{proj === 'dpr' ? t.dprUnitHint : t.plotUnitHint}</span>
+            <span className="plot-tool__hint">{proj === 'dpr' ? t.dprUnitHint : proj === 'ort' ? t.ortUnitHint : t.plotUnitHint}</span>
             <button type="button" className="plot-tool__generate" onClick={generate} disabled={p.busy != null}>
               {p.busy === proj ? t.computing : t.plotGenerate}
             </button>

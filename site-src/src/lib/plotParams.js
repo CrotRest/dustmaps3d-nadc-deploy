@@ -39,8 +39,51 @@ export function sinRequest(f) {
     fov: requiredNumber(f.fov),
     ...distanceParams(f),
     ...styleParams(f),
-    mark_region: Boolean(f.mark),
-    mark_color: f.markColor,
+    mark_region: false, // the site offers no marker circle on this view
+  };
+}
+
+/** Slice planes of the orthogonal slice: the two plane axes and the axis the slab is thick along. */
+export const ORT_PLANES = { xy: ['x', 'y', 'z'], xz: ['x', 'z', 'y'], yz: ['y', 'z', 'x'] };
+
+/**
+ * Form → body of POST /plots/ort (an axis-aligned slice or slab in heliocentric Galactic
+ * X/Y/Z: X towards the Galactic centre, Y towards l = 90°, Z towards the north pole).
+ * The backend samples on a resolution_pc grid and refuses more than 2,000,000 points.
+ */
+export function ortRequest(f) {
+  const vmin = requiredNumber(f.vmin);
+  const vmax = requiredNumber(f.vmax);
+  if (vmin >= vmax) throw new InputError('errColorRange');
+  if (f.scale === 'log' && vmin <= 0) throw new InputError('errLogMin');
+  const [axis1, axis2, fixed] = ORT_PLANES[f.plane];
+  const r1 = [requiredNumber(f.r1min), requiredNumber(f.r1max)];
+  const r2 = [requiredNumber(f.r2min), requiredNumber(f.r2max)];
+  const fr = [requiredNumber(f.fmin), requiredNumber(f.fmax)];
+  if (r1[0] >= r1[1] || r2[0] >= r2[1] || fr[0] > fr[1]) throw new InputError('errOrtRange');
+  const res = requiredNumber(f.res);
+  const smooth = requiredNumber(f.smooth);
+  if (res <= 0 || smooth < 0 || smooth > 100) throw new InputError('errOrtRes');
+  const step = res / 1000;
+  const cells = [r1[1] - r1[0], r2[1] - r2[0], fr[1] - fr[0]].map((w) => Math.max(1, Math.ceil(w / step)));
+  if (cells[0] * cells[1] * cells[2] > 2_000_000 || smooth / res > 100) throw new InputError('errOrtSamples');
+  return {
+    axis1,
+    axis2,
+    fixed_axis: fixed,
+    range1_min: r1[0],
+    range1_max: r1[1],
+    range2_min: r2[0],
+    range2_max: r2[1],
+    fixed_range_min: fr[0],
+    fixed_range_max: fr[1],
+    resolution_pc: res,
+    smooth_sigma_pc: smooth,
+    norm: f.scale,
+    vmin,
+    vmax,
+    colormap: f.cmap,
+    aggregate: f.agg,
   };
 }
 

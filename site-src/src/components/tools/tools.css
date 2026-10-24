@@ -1047,7 +1047,7 @@
   .plot-image__frame img {
     width: auto;
     max-width: 100%;
-    max-height: calc(100dvh - 300px);
+    max-height: calc(100dvh - 330px); /* room for the near-square orthogonal slice at 1280 × 720 */
     background: #ffffff;
     border: 1px solid var(--line-mid);
     border-radius: 4px;

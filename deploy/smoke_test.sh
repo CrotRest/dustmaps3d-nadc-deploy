@@ -79,6 +79,10 @@ url=$(json "d['url']")
 if [ "$code" = 200 ] && png_at "$url"; then pass "orthographic map (STILTS) -> $url"
 else fail "orthographic map (HTTP $code, body: $(head -c 300 "$TMP/out")) — 503 here usually means STILTS/java is not found"; fi
 
+code=$(post /api/v2/plots/ort '{"axis1":"x","axis2":"y","fixed_axis":"z","range1_min":-0.5,"range1_max":0.5,"range2_min":-0.5,"range2_max":0.5,"fixed_range_min":-0.02,"fixed_range_max":0.02,"resolution_pc":10,"smooth_sigma_pc":5,"norm":"log","vmin":0.01,"vmax":5,"colormap":"Spectral_r","aggregate":"mean"}')
+url=$(json "d['url']")
+if [ "$code" = 200 ] && png_at "$url"; then pass "orthogonal slice -> $url"; else fail "orthogonal slice (HTTP $code, body: $(head -c 200 "$TMP/out"))"; fi
+
 code=$(post /api/v2/plots/dpr '{"angle_degrees":60,"offset":0.3,"half_width":0.1,"s_range_min":-3,"s_range_max":3,"z_range_min":-0.5,"z_range_max":0.5,"norm":"log","vmin":0.05,"vmax":1,"colormap":"Spectral_r","show_markers":true,"show_superbubbles":true}')
 url=$(json "d['url']")
 if [ "$code" = 200 ] && png_at "$url"; then pass "oblique slice + superbubbles -> $url"

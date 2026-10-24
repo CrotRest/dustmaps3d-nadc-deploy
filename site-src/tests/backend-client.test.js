@@ -12,7 +12,7 @@ import {
   templateUrl,
 } from '../src/data/api.js';
 import { batchInputCsv, formatBatchRows, parseCsv } from '../src/lib/batch.js';
-import { bubbleRequests, carRequest, dprRequest, sinRequest } from '../src/lib/plotParams.js';
+import { bubbleRequests, carRequest, dprRequest, ortRequest, sinRequest } from '../src/lib/plotParams.js';
 import { formatSightline, resolveSightline } from '../src/lib/sightline.js';
 import { InputError } from '../src/lib/parse.js';
 import { parseRich } from '../src/components/ui/RichText.jsx';
@@ -145,9 +145,9 @@ describe('plot requests', () => {
       coord_system: 'galactic', lon_min: 0, lon_max: 360, lat_min: -90, lat_max: 90, d_min: 0, d_max: 3,
       vmin: 0.01, vmax: 1, norm: 'log', colormap: 'viridis', smoothing_sigma: 0.1,
     });
-    expect(sinRequest({ frame: 'equatorial', lc: '83.8', bc: '-5.4', fov: '20', dmin: '0.3', dmax: '0.5', mark: true, markColor: 'red', ...style })).toEqual({
+    expect(sinRequest({ frame: 'equatorial', lc: '83.8', bc: '-5.4', fov: '20', dmin: '0.3', dmax: '0.5', ...style })).toEqual({
       coord_system: 'equatorial', lon_center: 83.8, lat_center: -5.4, fov: 20, d_min: 0.3, d_max: 0.5,
-      vmin: 0.01, vmax: 1, norm: 'log', colormap: 'viridis', smoothing_sigma: 0.1, mark_region: true, mark_color: 'red',
+      vmin: 0.01, vmax: 1, norm: 'log', colormap: 'viridis', smoothing_sigma: 0.1, mark_region: false,
     });
   });
   it('rejects colour and distance ranges the backend would refuse', () => {
@@ -155,6 +155,17 @@ describe('plot requests', () => {
     expect(() => carRequest({ ...base, vmin: '0' })).toThrow('errLogMin');
     expect(() => carRequest({ ...base, vmin: '2' })).toThrow('errColorRange');
     expect(() => carRequest({ ...base, dmin: '2' })).toThrow('errDistRange');
+  });
+  it('the orthogonal slice body follows OrtPlot', () => {
+    const ort = { plane: 'xz', r1min: '-2', r1max: '2', r2min: '-0.5', r2max: '0.5', fmin: '-0.05', fmax: '0.05', res: '10', smooth: '5', agg: 'median', vmin: '0.01', vmax: '5', scale: 'log', cmap: 'viridis' };
+    expect(ortRequest(ort)).toEqual({
+      axis1: 'x', axis2: 'z', fixed_axis: 'y', range1_min: -2, range1_max: 2, range2_min: -0.5, range2_max: 0.5,
+      fixed_range_min: -0.05, fixed_range_max: 0.05, resolution_pc: 10, smooth_sigma_pc: 5, norm: 'log', vmin: 0.01, vmax: 5, colormap: 'viridis', aggregate: 'median',
+    });
+    expect(() => ortRequest({ ...ort, r1max: '-3' })).toThrow('errOrtRange');
+    expect(() => ortRequest({ ...ort, res: '0' })).toThrow('errOrtRes');
+    expect(() => ortRequest({ ...ort, res: '1', fmin: '-1', fmax: '1' })).toThrow('errOrtSamples');
+    expect(() => ortRequest({ ...ort, vmin: '0' })).toThrow('errLogMin');
   });
   it('the oblique slice body follows DprPlot (log scale only)', () => {
     const dpr = { angle: '60', offset: '0.3', halfWidth: '0.1', smin: '-3', smax: '3', zmin: '-0.5', zmax: '0.5', origin: true, bubbles: false, vmin: '0.05', vmax: '1', cmap: 'magma' };
