@@ -206,12 +206,13 @@ export function effectsAt(s) {
     locate: bump(s, 0.5, 0.88, 1.22, 1.55), // 01 · sightline lock-on HUD
     // the Sun marker stays on from 01 until 02's map has bloomed out of it, and comes back
     // while the map folds back into it
-    sun: bump(s, 0.45, 0.85, 1.72, 1.88) + bump(s, 2.12, 2.26, 2.36, 2.46),
+    sun: bump(s, 0.45, 0.85, 1.72, 1.88) + bump(s, 2.15, 2.27, 2.36, 2.46),
     // 02 · dust map, only while the camera holds edge-on: the map's origin is the Sun, so
     // the Mollweide ellipse blooms out of the Sun's place on screen (0 → 1), and folds
     // back into it before the camera pulls away
     sky: s > 1.6 && s < 2.4 ? 1 : 0,
-    bloom: s < 2 ? ramp(s, 1.63, 1.95) : 1 - ramp(s, 2.05, 2.37),
+    // (the fold starts past s = 2.11, where the 02 nav link lands, so the map rests full size)
+    bloom: s < 2 ? ramp(s, 1.63, 1.95) : 1 - ramp(s, 2.15, 2.37),
     // 03 · infrared mask edge (1 = none, 0 = full screen): sweeps in right → left, and like
     // the 02 map sweeps back left → right on the way to 04 (so scrolling up from 04 it
     // comes back in right → left)

@@ -228,12 +228,31 @@ export function createGalaxyEngine({ canvas, mapCanvas, hudCanvas, reduced: redu
   ro.observe(document.body);
   document.fonts?.ready.then(measure);
 
+  function aimCamera(cam, rig) {
+    cam.position.set(rig.pos[0], rig.pos[1], rig.pos[2]);
+    cam.up.set(0, 1, 0);
+    target.set(rig.target[0], rig.target[1], rig.target[2]);
+    cam.lookAt(target);
+    cam.rotateZ(rig.roll * DEG);
+    cam.fov = rig.fov;
+    cam.aspect = camera.aspect;
+    cam.updateProjectionMatrix();
+    cam.projectionMatrix.elements[8] = -rig.shift[0];
+    cam.projectionMatrix.elements[9] = -rig.shift[1];
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    cam.updateMatrixWorld();
+  }
+  // 02's map grows out of / folds into the Sun as seen before the fly-in along the disk:
+  // the live Sun slides down and off screen as the camera pushes in, which would drag a
+  // part-folded map down with it
+  const originCam = new PerspectiveCamera(40, 1, 0.01, 3000);
+
   // ---------- projection helpers for the HUD ----------
   const tmp = new Vector3();
-  const project = (x, y, z) => {
-    tmp.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+  const project = (x, y, z, cam = camera) => {
+    tmp.set(x, y, z).applyMatrix4(cam.matrixWorldInverse);
     const inFront = tmp.z < -0.02;
-    tmp.applyMatrix4(camera.projectionMatrix);
+    tmp.applyMatrix4(cam.projectionMatrix);
     return {
       x: ((tmp.x + 1) / 2) * W,
       y: ((1 - tmp.y) / 2) * H,
@@ -380,17 +399,7 @@ export function createGalaxyEngine({ canvas, mapCanvas, hudCanvas, reduced: redu
     // (and the Sun on screen) whenever the map grows out of it or folds back in
     const rig = cameraAt(sCur, t, mob, { push: dust.progress * fx.bloom, zoom: red.zoom });
 
-    camera.position.set(rig.pos[0], rig.pos[1], rig.pos[2]);
-    camera.up.set(0, 1, 0);
-    target.set(rig.target[0], rig.target[1], rig.target[2]);
-    camera.lookAt(target);
-    camera.rotateZ(rig.roll * DEG);
-    camera.fov = rig.fov;
-    camera.updateProjectionMatrix();
-    camera.projectionMatrix.elements[8] = -rig.shift[0];
-    camera.projectionMatrix.elements[9] = -rig.shift[1];
-    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-    camera.updateMatrixWorld();
+    aimCamera(camera, rig);
     core.quaternion.copy(camera.quaternion);
 
     shared.uTime.value = t;
@@ -404,8 +413,10 @@ export function createGalaxyEngine({ canvas, mapCanvas, hudCanvas, reduced: redu
     shared.uPxPerUnit.value = shared.uRes.value[1] / (2 * Math.tan((rig.fov * DEG) / 2));
 
     const mr = mollRect(W, H, mob);
-    // 02's map is centred on the Sun: it blooms out of the Sun's place on screen
-    const sunP = project(rig.frame.sun[0], rig.frame.sun[1], rig.frame.sun[2]);
+    // 02's map is centred on the Sun: it blooms out of the Sun's place on screen (seen
+    // from the camera without the fly-in, so the map holds still while the distance sweeps)
+    aimCamera(originCam, cameraAt(sCur, t, mob, { push: 0, zoom: red.zoom }));
+    const sunP = project(rig.frame.sun[0], rig.frame.sun[1], rig.frame.sun[2], originCam);
     const origin = sunP.visible ? sunP : { x: mr.cx, y: mr.cy };
     const e = fx.bloom * fx.bloom * (3 - 2 * fx.bloom);
     const grown = { cx: origin.x + (mr.cx - origin.x) * e, cy: origin.y + (mr.cy - origin.y) * e, a: mr.a * e, b: mr.b * e };
