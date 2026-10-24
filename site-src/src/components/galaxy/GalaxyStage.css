@@ -7,6 +7,7 @@
 }
 
 .galaxy-stage__gl,
+.galaxy-stage__map,
 .galaxy-stage__hud {
   position: absolute;
   inset: 0;
@@ -26,6 +27,7 @@
 
 /* no WebGL: a still, painted galaxy */
 .galaxy-stage--fallback .galaxy-stage__gl,
+.galaxy-stage--fallback .galaxy-stage__map,
 .galaxy-stage--fallback .galaxy-stage__hud {
   display: none;
 }

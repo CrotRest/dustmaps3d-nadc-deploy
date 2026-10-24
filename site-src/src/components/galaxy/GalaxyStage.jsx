@@ -9,6 +9,7 @@ import './GalaxyStage.css';
  */
 export default function GalaxyStage() {
   const glRef = useRef(null);
+  const mapRef = useRef(null);
   const hudRef = useRef(null);
   const engineRef = useRef(null);
   const reduced = useReducedMotion();
@@ -31,7 +32,7 @@ export default function GalaxyStage() {
     import('./engine.js')
       .then(({ createGalaxyEngine }) => {
         if (cancelled) return;
-        engine = createGalaxyEngine({ canvas, hudCanvas: hudRef.current, reduced: reducedRef.current });
+        engine = createGalaxyEngine({ canvas, mapCanvas: mapRef.current, hudCanvas: hudRef.current, reduced: reducedRef.current });
         engine.setPaused(pausedRef.current);
         engineRef.current = engine;
         canvas.addEventListener('webglcontextlost', onLost);
@@ -59,6 +60,7 @@ export default function GalaxyStage() {
   return (
     <div className={`galaxy-stage${failed ? ' galaxy-stage--fallback' : ''}`} aria-hidden="true">
       <canvas ref={glRef} className="galaxy-stage__gl" />
+      <canvas ref={mapRef} className="galaxy-stage__map" />
       <div className="galaxy-stage__scrim" />
       <canvas ref={hudRef} className="galaxy-stage__hud" />
     </div>

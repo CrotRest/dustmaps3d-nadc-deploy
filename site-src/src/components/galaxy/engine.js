@@ -56,7 +56,7 @@ function detectTier() {
   return { q: 1, dpr: Math.min(window.devicePixelRatio || 1, 1.6) };
 }
 
-export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = false }) {
+export function createGalaxyEngine({ canvas, mapCanvas, hudCanvas, reduced: reducedInit = false }) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
   renderer.setClearColor(0x03040b, 1);
   renderer.autoClear = false;
@@ -185,10 +185,8 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
   const bandLayer = points[LAYERS.findIndex((c) => c.key === 'band')];
   const irOnly = [irHaze, ...points.filter((p, i) => LAYERS[i].key === 'irWebIR' || LAYERS[i].key === 'irArmsIR')];
 
-  // section 02: the real dust map as particles (loaded on approach)
-  const dust = createDustSky(tier.q, shared);
-  scene.add(dust.points);
-  scene.add(dust.image);
+  // section 02: the real dust map on its own full-resolution canvas (loaded on approach)
+  const dust = createDustSky(mapCanvas);
 
   const camera = new PerspectiveCamera(40, 1, 0.01, 3000);
   const hud = createHud(hudCanvas);
@@ -203,6 +201,7 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
     renderer.setPixelRatio(dpr);
     renderer.setSize(W, H, false);
     hud.resize(W, H, Math.min(window.devicePixelRatio || 1, 2));
+    dust.resize(W, H);
     const db = renderer.getDrawingBufferSize(new Vector2());
     shared.uRes.value = [db.x, db.y];
     shared.uDpr.value = dpr;
@@ -275,8 +274,6 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
   function applyFrac(f) {
     frac = f;
     Object.values(geoms).forEach((g) => g.setDrawRange(0, Math.floor(g.userData.n * frac)));
-    const dg = dust.points.geometry;
-    dg.setDrawRange(0, Math.floor(dg.attributes.aLB.count * Math.max(0.5, frac)));
     points.forEach((p, i) => {
       const cfg = LAYERS[i];
       if (cfg.mode !== 2) p.material.uniforms.uAlphaMul.value = cfg.alpha * comp * Math.min(2, Math.pow(1 / frac, 0.6));
@@ -412,29 +409,20 @@ export function createGalaxyEngine({ canvas, hudCanvas, reduced: reducedInit = f
     const origin = sunP.visible ? sunP : { x: mr.cx, y: mr.cy };
     const e = fx.bloom * fx.bloom * (3 - 2 * fx.bloom);
     const grown = { cx: origin.x + (mr.cx - origin.x) * e, cy: origin.y + (mr.cy - origin.y) * e, a: mr.a * e, b: mr.b * e };
-    const du = dust.points.material.uniforms;
-    dust.points.visible = dust.ready && fx.sky > 0.001 && fx.bloom > 0.001 && !DEV_NODUST;
-    du.uOpacity.value = fx.sky;
-    // once the map has bloomed out of the Sun, the sharp image layer takes over from the particles
-    const handoff = DEV_NODUST ? 0 : Math.min(1, Math.max(0, (fx.bloom - 0.85) / 0.15));
-    du.uHandoff.value = handoff * handoff * (3 - 2 * handoff);
-    dust.image.visible = dust.ready && fx.sky > 0.001 && handoff > 0 && !DEV_NODUST;
-    dust.image.material.uniforms.uOpacity.value = fx.sky * du.uHandoff.value;
-    if (du.uHandoff.value > 0.999) dust.points.visible = false;
-    du.uRect.value = [(mr.cx / W) * 2 - 1, 1 - (mr.cy / H) * 2, (mr.a / W) * 2, (mr.b / H) * 2];
-    du.uSun.value = [(origin.x / W) * 2 - 1, 1 - (origin.y / H) * 2];
-    du.uBloom.value = fx.bloom;
-    du.uDpr.value = dpr;
     const mapOn = dust.ready && !DEV_NODUST ? fx.sky * Math.min(1, fx.bloom * 4) : 0;
     shared.uMapAmt.value = mapOn;
     shared.uMapX.value = [0, mapOn > 0 ? 1.01 : 0];
     const [bx, by] = shared.uRes.value;
     shared.uMapEll.value = [(grown.cx / W) * bx, by - (grown.cy / H) * by, Math.max(1e-3, (grown.a / W) * bx), Math.max(1e-3, (grown.b / H) * by)];
-    du.uLeftFade.value = 1 - mob;
-    du.uPxPerNdc.value = [W / 2, H / 2];
     if (!hold) {
       renderer.clear();
       renderer.render(scene, camera);
+      // the map grows with the HUD graticule (the same ellipse), so the two stay locked
+      dust.render({
+        rect: [(grown.cx / W) * 2 - 1, 1 - (grown.cy / H) * 2, (grown.a / W) * 2, (grown.b / H) * 2],
+        opacity: mapOn,
+        leftFade: 1 - mob,
+      });
     }
     const lock = reduced ? 1 : Math.min(1, red.t / RED_LOCK_S);
     hud.draw({ fx, t: reduced ? t : hudTime, P: helpers(rig.frame), map: { ...grown, grow: e, ready: dust.ready && !DEV_NODUST, kpc: dust.kpc }, red: { lock, zoom: red.zoom, since: red.t - RED_LOCK_S - RED_ZOOM_S }, frozen: reduced });
