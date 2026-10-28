@@ -9,9 +9,13 @@
       content="基于 Gaia 与 LAMOST 的全天三维尘埃消光查询平台（重构演示，数据为模拟值）。All-sky 3D dust map platform — redesign demo with simulated data."
     />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- section 02's nearest map slice downloads from the start, alongside the scripts -->
+    <link rel="preload" href="./dustmap/atlas.json" as="fetch" crossorigin />
+    <link rel="preload" href="./dustmap/atlas-s00.webp" as="fetch" crossorigin />
     <title>银河系三维尘埃消光查询平台 · 3D Dust Map</title>
-    <script type="module" crossorigin src="./assets/index-B9D3rU08.js"></script>
+    <script type="module" crossorigin src="./assets/index-BhFKmL-K.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-Bt3lVOkO.css">
+    <link rel="modulepreload" crossorigin href="./assets/engine-H6CR4cvV.js">
   </head>
   <body>
     <div id="root"></div>

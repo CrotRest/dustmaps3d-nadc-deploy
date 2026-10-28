@@ -7,12 +7,13 @@ output grid. The shells are log-spaced over D_MIN … D_MAX, the only range the 
 through.
 
 Run with the backend's environment (it has dustmaps3d and data_v3.fits):
-  ../dustmaps3d-backend/.venv/bin/python scripts/build-dustmap-model.py public/dustmap
+  ../dustmaps3d-backend/.venv/bin/python scripts/build-dustmap-model.py data/dustmap
 
-Output (what dustSky.js reads): PER_FILE slices per 8-bit PNG, stacked top to bottom
+Output (the lossless master; build-dustmap-web.py turns it into what dustSky.js loads): PER_FILE slices per 8-bit PNG, stacked top to bottom
 (atlas-0.png, atlas-1.png, …; each under the 16.7 Mpx canvas limit of iOS), 0 = no data,
 1..255 = log10 density linear in [VMIN, VMAX]; within a slice row 0 = b +90, column 0 = l 0
 increasing; and atlas.json with the grid and the distance of every slice.
+Then run build-dustmap-web.py data/dustmap public/dustmap.
 """
 import json, os, sys, time
 import numpy as np

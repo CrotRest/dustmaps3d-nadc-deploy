@@ -392,7 +392,8 @@ export function createGalaxyEngine({ canvas, mapCanvas, hudCanvas, reduced: redu
     }
     const fx = effectsAt(sCur);
     // the distance sweep drives a gentle dolly towards the Galactic Centre in section 02
-    if (sCur > 0.6 || time > 4) dust.load();
+    // the 02 map streams in from the start (nearest slice first), so it is there on arrival
+    dust.load();
     // the distance sweep waits at its nearest slice until the map has bloomed out of the Sun
     if (fx.sky > 0.001 || (sCur > 1.3 && sCur < 2.7)) dust.tick(dt, still, fx.bloom);
     // the fly-in along the disk scales with the bloom, so the camera is back behind the Sun

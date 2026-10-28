@@ -77,7 +77,8 @@ float texel(int x, int y, int k) {
   x = x < 0 ? x + nl : (x >= nl ? x - nl : x);
   y = clamp(y, 0, nb - 1);
   float r = texelFetch(uAtlas, ivec3(x, y, k), 0).r * 255.0;
-  return r < 0.5 ? -1.0 : (r - 1.0) / 254.0;
+  // the atlas is lossy WebP: codes 1–2 (the black end) may come back as 0, so below 3 = no data
+  return r < 2.5 ? -1.0 : (r - 1.0) / 254.0;
 }
 
 // bilinear over the grid points that have data: x = value, y = weight with data
@@ -144,40 +145,30 @@ void main() {
 }
 `;
 
-async function loadAtlas() {
-  const meta = await fetch(`${DATA_DIR}atlas.json`).then((r) => {
-    if (!r.ok) throw new Error(`atlas.json ${r.status}`);
-    return r.json();
-  });
-  const sliceSize = meta.nl * meta.nb;
-  const data = new Uint8Array(sliceSize * meta.count);
-  // each PNG holds meta.perFile slices stacked top to bottom: in memory they are already
-  // the consecutive layers of the texture array
-  await Promise.all(
-    meta.files.map(async (name, i) => {
-      const r = await fetch(`${DATA_DIR}${name}`);
-      if (!r.ok) throw new Error(`${name} ${r.status}`);
-      const bmp = await createImageBitmap(await r.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-      const canvas = document.createElement('canvas');
-      canvas.width = bmp.width;
-      canvas.height = bmp.height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(bmp, 0, 0);
-      bmp.close?.();
-      const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      const off = i * meta.perFile * sliceSize;
-      const n = Math.min(rgba.length / 4, data.length - off);
-      for (let p = 0; p < n; p++) data[off + p] = rgba[p * 4];
-      canvas.width = canvas.height = 0; // let Safari free the canvas memory now
-    }),
-  );
-  const tex = new DataArrayTexture(data, meta.nl, meta.nb, meta.count);
-  tex.format = RedFormat;
-  tex.magFilter = NearestFilter;
-  tex.minFilter = NearestFilter;
-  tex.generateMipmaps = false;
-  tex.needsUpdate = true;
-  return { meta, tex };
+// one slice file → its 8-bit codes (the PNG/WebP is grey, so the red channel is the value)
+async function decodeSlice(name) {
+  const r = await fetch(`${DATA_DIR}${name}`);
+  if (!r.ok) throw new Error(`${name} ${r.status}`);
+  const bmp = await createImageBitmap(await r.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close?.();
+  const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  canvas.width = canvas.height = 0; // let Safari free the canvas memory now
+  const out = new Uint8Array(rgba.length / 4);
+  for (let p = 0; p < out.length; p++) out[p] = rgba[p * 4];
+  return out;
+}
+
+const STREAMS = 4; // slice files in flight at once, nearest first
+
+async function loadMeta() {
+  const r = await fetch(`${DATA_DIR}atlas.json`);
+  if (!r.ok) throw new Error(`atlas.json ${r.status}`);
+  return r.json();
 }
 
 /** The map layer on its own canvas + its distance clock. */
@@ -209,8 +200,9 @@ export function createDustSky(canvas) {
   mesh.frustumCulled = false;
   scene.add(mesh);
 
-  let meta = null;
+  let meta = null; // set once the nearest slice is in
   let loading = null;
+  let loaded = 0; // slices in, counted from the nearest without a gap
   let shown = false;
   // dev only: ?dclock=<seconds> starts the distance sweep elsewhere (screenshots)
   let clock = import.meta.env.DEV ? Number(new URLSearchParams(window.location.search).get('dclock')) || 0 : 0;
@@ -239,18 +231,48 @@ export function createDustSky(canvas) {
     get progress() {
       return meta ? slice / (meta.count - 1) : 0;
     },
+    /**
+     * Streams the full-resolution slices (one file each, ≈120 KB), nearest first: the map is
+     * drawn, sharp, as soon as the first one is in, and the sweep only reaches slices that have
+     * arrived (shown to the shader as the slice count), so nothing blurry is ever on screen.
+     */
     load() {
-      if (!loading) {
-        loading = loadAtlas()
-          .then(({ meta: m, tex }) => {
-            meta = m;
+      if (loading || (meta && loaded === meta.count)) return loading;
+      loading = loadMeta()
+        .then(async (m) => {
+          let tex = u.uAtlas.value;
+          if (!tex) {
+            tex = new DataArrayTexture(new Uint8Array(m.nl * m.nb * m.count), m.nl, m.nb, m.count);
+            tex.format = RedFormat;
+            tex.magFilter = NearestFilter;
+            tex.minFilter = NearestFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
             u.uAtlas.value = tex;
-            u.uAtlasInfo.value = [m.nl, m.nb, 0, m.count];
-          })
-          .catch(() => {
-            loading = null;
-          });
-      }
+            tex.userData.have = new Array(m.count).fill(false);
+          }
+          const have = tex.userData.have;
+          const size = m.nl * m.nb;
+          let next = 0;
+          const worker = async () => {
+            while (next < m.count) {
+              const k = next++;
+              if (have[k]) continue;
+              tex.image.data.set(await decodeSlice(m.files[k]), k * size);
+              have[k] = true;
+              tex.addLayerUpdate(k);
+              tex.needsUpdate = true;
+              while (loaded < m.count && have[loaded]) loaded++;
+              u.uAtlasInfo.value = [m.nl, m.nb, 0, Math.max(1, loaded)];
+              if (loaded > 0) meta = m;
+            }
+          };
+          await Promise.all(Array.from({ length: STREAMS }, worker));
+        })
+        .catch(() => {})
+        .finally(() => {
+          loading = null; // anything that failed is fetched again on the next call
+        });
       return loading;
     },
     resize(W, H) {
@@ -268,6 +290,7 @@ export function createDustSky(canvas) {
       if (bloom > 0.999) started = true;
       if (still) {
         slice = meta.kpc.reduce((best, d, i) => (Math.abs(d - STATIC_KPC) < Math.abs(meta.kpc[best] - STATIC_KPC) ? i : best), 0);
+        slice = Math.min(slice, loaded - 1);
       } else if (!started) {
         clock = 0;
         slice = 0;
@@ -276,7 +299,8 @@ export function createDustSky(canvas) {
         const half = ONE_WAY_S + HOLD_S;
         const tt = clock % (2 * half);
         const q = smooth(Math.min(1, (tt < half ? tt : tt - half) / ONE_WAY_S));
-        slice = (tt < half ? q : 1 - q) * (meta.count - 1);
+        // slices still on their way: the sweep waits at the farthest one in
+        slice = Math.min((tt < half ? q : 1 - q) * (meta.count - 1), loaded - 1);
       }
       u.uSlice.value = slice;
     },
