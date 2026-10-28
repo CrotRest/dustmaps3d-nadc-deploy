@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useLang } from '../i18n/LangContext.jsx';
 import { useTools } from '../state/ToolsContext.jsx';
 import {
@@ -6,7 +5,7 @@ import {
   CITATION_AUTHORS,
   CITATION_JOURNAL,
   CITATION_TAIL,
-  CITED_BY,
+  CITED_BY_URL,
   CODE_SNIPPET,
   PIP_COMMAND,
 } from '../data/content.js';
@@ -80,37 +79,15 @@ export function CiteSection() {
   );
 }
 
-const CITED_PREVIEW = 6;
-
-/** Papers that cite this work: a card grid, one line each on how they use the map. */
+/** Papers that cite this work: one link to their list on ADS, which stays current by itself. */
 function CitedBy() {
-  const { t, lang } = useLang();
-  const [all, setAll] = useState(false);
-  const shown = all ? CITED_BY : CITED_BY.slice(0, CITED_PREVIEW);
+  const { t } = useLang();
   return (
     <div className="cited" id="citations">
-      <div className="cited__head">
-        <h3 className="cited__title">{t.citedTitle}</h3>
-        <span className="cited__count">{t.citedCount.replace('{n}', CITED_BY.length)}</span>
-      </div>
-      <ul className="cited__grid">
-        {shown.map((p) => (
-          <li key={p.doi || p.url}>
-            <a className="cited__card" href={p.url || `https://doi.org/${p.doi}`} target="_blank" rel="noreferrer">
-              <span className="cited__meta">
-                {p.who} {p.year} · <em>{p.journal}</em>
-              </span>
-              <span className="cited__paper">{p.title}</span>
-              <span className="cited__use">{p.use[lang] || p.use.en}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-      {CITED_BY.length > CITED_PREVIEW && (
-        <button type="button" className="cited__more" onClick={() => setAll((v) => !v)} aria-expanded={all}>
-          {all ? t.citedLess : t.citedAll.replace('{n}', CITED_BY.length)}
-        </button>
-      )}
+      <h3 className="cited__title">{t.citedTitle}</h3>
+      <a className="cited__link" href={CITED_BY_URL} target="_blank" rel="noopener noreferrer">
+        {t.citedLink} ↗
+      </a>
     </div>
   );
 }
